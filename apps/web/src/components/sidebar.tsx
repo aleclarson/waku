@@ -438,7 +438,13 @@ function SessionMetadata({ item, nowSeconds, t }: { item: SessionItem; nowSecond
       <WakuIcon className="size-[11px] shrink-0" name="folder" />
       <span className="min-w-0 flex-1 truncate">{item.projectName}</span>
       {inWorktree && (
-        <WakuIcon className="size-[11px] shrink-0 text-[var(--text-tertiary)]" name="fork" />
+        <WakuIcon
+          className={cn(
+            'size-[11px] shrink-0 text-[var(--text-ghost)]',
+            item.session.status !== 'idle' && 'text-[var(--text-tertiary)]',
+          )}
+          name="fork"
+        />
       )}
       {timeLabel && (
         <span className={cn(

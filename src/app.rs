@@ -1711,20 +1711,12 @@ fn single_line_label(text: &str) -> String {
 }
 
 /// Seconds until any session's time label next changes value, or `None` when
-/// no label is on the clock at all. A running turn's elapsed counter moves
-/// every second; a settled reply's "5m"/"3h"/"2d" moves only at its unit
-/// boundary, so the wake-up this feeds gets rarer as the history ages.
+/// no label is on the clock at all. A reply's "5m"/"3h"/"2d" moves only at
+/// its unit boundary, so the wake-up this feeds gets rarer as the history
+/// ages.
 pub(super) fn next_time_label_change(sessions: &[AgentSession], now: u64) -> Option<u64> {
     let mut next: Option<u64> = None;
     for session in sessions {
-        if session.is_busy()
-            && session
-                .turns
-                .last()
-                .is_some_and(|turn| turn.status == TurnStatus::Running)
-        {
-            return Some(1);
-        }
         if let Some(last_reply_at) = session.last_reply_at {
             let elapsed = now.saturating_sub(last_reply_at);
             let step = match elapsed {

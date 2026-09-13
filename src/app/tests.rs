@@ -1723,7 +1723,7 @@ fn worked_duration_uses_readable_units() {
 }
 
 #[test]
-fn sidebar_time_labels_stay_quiet_during_the_live_turn() {
+fn sidebar_time_labels_show_reply_age_during_a_live_turn() {
     use super::sidebar::{format_time_ago, session_time_label};
 
     assert_eq!(format_time_ago(0), "just now");
@@ -1736,15 +1736,15 @@ fn sidebar_time_labels_stay_quiet_during_the_live_turn() {
     let mut session = AgentSession::new(Uuid::new_v4(), ProviderKind::Codex);
     assert_eq!(session_time_label(&session, 1_000), None);
 
-    // A live turn shows no label — the trailing slot carries the worktree
-    // icon for a worktree task and stays empty for the primary checkout.
-    session.last_reply_at = Some(40);
+    // A live turn keeps the reply age — the worktree icon sits beside it
+    // rather than replacing it.
     session.begin_turn("go");
     session.status = SessionStatus::Working;
     session.turns[0].started_at = 100;
-    assert_eq!(session_time_label(&session, 109), None);
+    session.last_reply_at = Some(40);
+    assert_eq!(session_time_label(&session, 109).as_deref(), Some("1m"));
 
-    // Settled again: back to how long ago the agent last replied.
+    // Settled again: still how long ago the agent last replied.
     session.finish_active_turn(TurnStatus::Completed);
     session.status = SessionStatus::Idle;
     session.last_reply_at = Some(500);
@@ -1796,12 +1796,14 @@ fn time_label_wakes_land_exactly_on_label_boundaries() {
         Some(10)
     );
 
-    // A live turn pins the chain to seconds for its elapsed counter.
+    // A live turn follows the same boundary math — the row shows the reply
+    // age, so there is no per-second counter to feed.
     let mut busy = AgentSession::new(Uuid::new_v4(), ProviderKind::Codex);
     busy.begin_turn("go");
     busy.status = SessionStatus::Working;
+    busy.last_reply_at = Some(1_000);
     let sessions = [busy];
-    assert_eq!(next_time_label_change(&sessions, 1_030), Some(1));
+    assert_eq!(next_time_label_change(&sessions, 1_030), Some(30));
 }
 
 #[test]

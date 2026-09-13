@@ -39,6 +39,7 @@ describe('desktop sidebar presentation', () => {
 
     const live = session({
       status: 'working',
+      last_reply_at: 100,
       turns: [{
         id: 'turn',
         turn_count: 1,
@@ -50,9 +51,9 @@ describe('desktop sidebar presentation', () => {
       }],
     })
     expect(sessionHasLiveTurn(live)).toBe(true)
-    expect(sessionTimeLabel(live, 165)).toBeNull()
-    // A live turn shows no ticking label, so it adds no per-second wake.
-    expect(nextSidebarUpdateDelay([live], 165)).toBeGreaterThan(1)
+    // A live turn keeps the reply age on the same minute-boundary clock.
+    expect(sessionTimeLabel(live, 165)).toBe('1m')
+    expect(nextSidebarUpdateDelay([live], 165)).toBe(55)
   })
 
   test('does not invent a reply time and keeps cursor-only resumed tasks', () => {

@@ -219,31 +219,16 @@ const SIDEBAR_GROUP_CHILD_PADDING: f32 = 28.0;
 const SIDEBAR_PROJECT_RECENT_WINDOW_SECONDS: u64 = 3 * 24 * 60 * 60;
 const SIDEBAR_PROJECT_REVEAL_BATCH: usize = 30;
 
-/// The session row's trailing time: how long ago the agent last replied. A
-/// live turn carries no label and a session that has never replied shows
-/// nothing. The worktree icon beside it is a persistent marker and does not
-/// wait for a live turn.
+/// The session row's trailing time: how long ago the agent last replied,
+/// shown through a live turn too. A session that has never replied shows
+/// nothing.
 pub(super) fn session_time_label(session: &AgentSession, now: u64) -> Option<String> {
     if session.status == SessionStatus::Background {
         return Some(tr!("sidebar.status_background"));
     }
-    if session_has_live_turn(session) {
-        return None;
-    }
     session
         .last_reply_at
         .map(|last_reply_at| format_time_ago(now.saturating_sub(last_reply_at)))
-}
-
-/// A turn is live while the session is busy and its last turn is still
-/// running. The trailing time label reads this so it stays quiet while the
-/// agent works.
-fn session_has_live_turn(session: &AgentSession) -> bool {
-    session.is_busy()
-        && session
-            .turns
-            .last()
-            .is_some_and(|turn| turn.status == TurnStatus::Running)
 }
 
 /// Recency for sidebar ordering and date groups. A submitted turn promotes the
@@ -1984,7 +1969,15 @@ impl Waku {
                     })
                     .when(!has_detail_label, |element| element.child(div().flex_1()))
                     .when(session.workspace.is_worktree(), |element| {
-                        element.child(icon("icons/fork.svg", 12.5, theme.text_tertiary))
+                        element.child(icon(
+                            "icons/fork.svg",
+                            12.5,
+                            if session.is_busy() {
+                                theme.text_tertiary
+                            } else {
+                                theme.text_ghost
+                            },
+                        ))
                     })
                     .when_some(
                         session_time_label(session, unix_time()),
