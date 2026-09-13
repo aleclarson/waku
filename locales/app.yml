@@ -561,6 +561,8 @@ project.no_project:
   en: Don't work in a project
 project.no_project_name:
   en: No project
+project.chat:
+  en: Chat
 project.choose_project:
   en: choose a project
 project.default_folder:

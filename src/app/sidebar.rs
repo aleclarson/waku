@@ -1392,12 +1392,12 @@ impl Waku {
             .entry(group)
             .or_insert_with(|| cx.focus_handle())
             .clone();
-        let show_folder_icon =
+        let show_group_icon =
             matches!(group, SidebarGroup::Project(_) | SidebarGroup::Projectless);
-        let folder_icon = if collapsed {
-            "icons/folder.svg"
-        } else {
-            "icons/folder-open.svg"
+        let group_icon = match group {
+            SidebarGroup::Projectless => "icons/chat.svg",
+            _ if collapsed => "icons/folder.svg",
+            _ => "icons/folder-open.svg",
         };
         let label = match group {
             SidebarGroup::Updated(group) => group.label(),
@@ -1408,7 +1408,7 @@ impl Waku {
                 .find(|project| project.id == project_id)
                 .map(Project::display_name)
                 .unwrap_or_else(|| tr!("project.no_project_name")),
-            SidebarGroup::Projectless => tr!("project.no_project_name"),
+            SidebarGroup::Projectless => tr!("project.chat"),
         };
         let updated_chevron = matches!(group, SidebarGroup::Updated(_)).then(|| {
             icon("icons/chevron-down.svg", 14.0, theme.text_secondary)
@@ -1418,7 +1418,7 @@ impl Waku {
                 .invisible()
                 .group_hover(group_name.clone(), |icon| icon.visible())
         });
-        let compose = show_folder_icon.then(|| {
+        let compose = show_group_icon.then(|| {
             let compose_focus = self
                 .sidebar_group_compose_focuses
                 .borrow_mut()
@@ -1499,8 +1499,8 @@ impl Waku {
                     .flex()
                     .items_center()
                     .gap(px(5.0))
-                    .when(show_folder_icon, |element| {
-                        element.child(icon(folder_icon, 14.0, theme.text_secondary))
+                    .when(show_group_icon, |element| {
+                        element.child(icon(group_icon, 14.0, theme.text_secondary))
                     })
                     .child(
                         div()
@@ -1517,7 +1517,7 @@ impl Waku {
             .when(first, |element| {
                 element.child(self.render_sidebar_header_actions(cx))
             })
-            .when(show_folder_icon && has_expanded_children, |element| {
+            .when(show_group_icon && has_expanded_children, |element| {
                 element.child(
                     div()
                         .absolute()
@@ -1817,14 +1817,20 @@ impl Waku {
                 })
         } else {
             Some(SharedString::from(
-                project
-                    .map(Project::display_name)
-                    .unwrap_or_else(|| tr!("sidebar.unknown_project")),
+                if project.is_some_and(Project::is_projectless) {
+                    tr!("project.chat")
+                } else {
+                    project
+                        .map(Project::display_name)
+                        .unwrap_or_else(|| tr!("sidebar.unknown_project"))
+                },
             ))
         };
         let has_detail_label = detail_label.is_some();
         let detail_icon = if grouped_by_project {
             "icons/git-branch.svg"
+        } else if project.is_some_and(Project::is_projectless) {
+            "icons/chat.svg"
         } else {
             "icons/folder.svg"
         };

@@ -28,6 +28,7 @@ const ICONS: &[(&str, &[u8])] = icons![
     "bot",
     "case-sensitive",
     "chart-column",
+    "chat",
     "check",
     "changes",
     "cloud-upload",
