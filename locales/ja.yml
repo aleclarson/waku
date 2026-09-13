@@ -73,6 +73,8 @@ command_palette.resume_failed: "セッションを再開できませんでした
 
 task_switcher.recently_viewed: 最近表示したタスク
 
+project_switcher.recently_used: 最近使用したプロジェクト
+
 language.title: 言語
 language.system: システム
 language.description: Waku 全体で使用する言語を選択します

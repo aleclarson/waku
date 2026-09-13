@@ -1,0 +1,553 @@
+//! Cmd-E switching across recently used projects in a New Task draft.
+//!
+//! Mirrors the task switcher: the project order is snapshotted when the
+//! overlay opens, repeated presses move only the highlight, and releasing the
+//! platform modifier commits once — so the draft under the pointer never
+//! retargets mid-gesture. Recency is borrowed from the task switcher's
+//! session history: a project ranks by when one of its tasks was last
+//! activated. The snapshot is capped at ten projects.
+
+use super::*;
+
+const MODAL_WIDTH: f32 = 400.0;
+const MODAL_RADIUS: f32 = 14.0;
+const MODAL_INSET: f32 = 6.0;
+const TITLE_HEIGHT: f32 = 30.0;
+const TITLE_INSET_X: f32 = 10.0;
+const ROW_HEIGHT: f32 = 34.0;
+const ROW_INSET_X: f32 = 10.0;
+const ROW_RADIUS: f32 = 8.0;
+const PATH_MAX_WIDTH: f32 = 180.0;
+const MAX_PROJECTS: usize = 10;
+const WINDOW_MARGIN: f32 = 44.0;
+
+/// Runtime-only switcher state, like its task counterpart: recency lives in
+/// the task switcher's session history, so restoration seeds nothing here.
+pub(super) struct ProjectSwitcherUi {
+    open: bool,
+    ordered_project_ids: Vec<Uuid>,
+    highlighted_project_id: Option<Uuid>,
+    original_session_id: Option<Uuid>,
+    focus: FocusHandle,
+    previous_focus: Option<FocusHandle>,
+    scroll: ScrollHandle,
+    generation: u64,
+}
+
+impl ProjectSwitcherUi {
+    pub(super) fn new(focus: FocusHandle) -> Self {
+        Self {
+            open: false,
+            ordered_project_ids: Vec::new(),
+            highlighted_project_id: None,
+            original_session_id: None,
+            focus,
+            previous_focus: None,
+            scroll: ScrollHandle::new(),
+            generation: 0,
+        }
+    }
+
+    pub(super) fn is_open(&self) -> bool {
+        self.open
+    }
+
+    /// The draft the switcher was opened on went away; without a window the
+    /// previous focus cannot be restored, so just drop the overlay state.
+    pub(super) fn session_removed(&mut self, session_id: Uuid) {
+        if self.original_session_id == Some(session_id) {
+            self.dismiss();
+        }
+    }
+
+    fn reveal_highlight(&self) {
+        let Some(index) = self.highlighted_project_id.and_then(|highlighted| {
+            self.ordered_project_ids
+                .iter()
+                .position(|candidate| *candidate == highlighted)
+        }) else {
+            return;
+        };
+        self.scroll.scroll_to_item(index);
+    }
+
+    fn dismiss(&mut self) -> Option<FocusHandle> {
+        self.open = false;
+        self.ordered_project_ids.clear();
+        self.highlighted_project_id = None;
+        self.original_session_id = None;
+        self.generation = self.generation.wrapping_add(1);
+        self.previous_focus.take()
+    }
+}
+
+fn ordered_project_ids(
+    current: Option<Uuid>,
+    recent: &[Uuid],
+    projects: &[Project],
+) -> Vec<Uuid> {
+    let valid = projects
+        .iter()
+        .map(|project| project.id)
+        .collect::<HashSet<_>>();
+    let mut seen = HashSet::with_capacity(projects.len());
+    let mut ordered = Vec::with_capacity(projects.len().min(MAX_PROJECTS));
+    let mut push = |id| {
+        if ordered.len() < MAX_PROJECTS && valid.contains(&id) && seen.insert(id) {
+            ordered.push(id);
+        }
+    };
+
+    if let Some(current) = current {
+        push(current);
+    }
+    for recent in recent {
+        push(*recent);
+    }
+    ordered
+}
+
+impl Waku {
+    pub(super) fn switch_project_forward_action(
+        &mut self,
+        _: &SwitchProjectForward,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.cycle_project_switcher(false, window, cx);
+    }
+
+    pub(super) fn switch_project_backward_action(
+        &mut self,
+        _: &SwitchProjectBackward,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.cycle_project_switcher(true, window, cx);
+    }
+
+    pub(super) fn select_first_project_action(
+        &mut self,
+        _: &SelectFirstProject,
+        _: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.set_project_switcher_highlight(0, cx);
+    }
+
+    pub(super) fn select_last_project_action(
+        &mut self,
+        _: &SelectLastProject,
+        _: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let last = self
+            .project_switcher
+            .ordered_project_ids
+            .len()
+            .saturating_sub(1);
+        self.set_project_switcher_highlight(last, cx);
+    }
+
+    pub(super) fn confirm_project_switch_action(
+        &mut self,
+        _: &ConfirmProjectSwitch,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.finish_project_switcher(false, window, cx);
+    }
+
+    pub(super) fn cancel_project_switch_action(
+        &mut self,
+        _: &CancelProjectSwitch,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.cancel_project_switcher(window, cx);
+    }
+
+    pub(super) fn project_switcher_modifiers_changed(
+        &mut self,
+        event: &gpui::ModifiersChangedEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.project_switcher.open && !event.secondary() {
+            self.finish_project_switcher(false, window, cx);
+        }
+    }
+
+    fn cycle_project_switcher(
+        &mut self,
+        reverse: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if !self.project_switcher.open {
+            self.open_project_switcher(reverse, window, cx);
+            return;
+        }
+
+        let Some(current_index) =
+            self.project_switcher
+                .highlighted_project_id
+                .and_then(|current| {
+                    self.project_switcher
+                        .ordered_project_ids
+                        .iter()
+                        .position(|candidate| *candidate == current)
+                })
+        else {
+            self.cancel_project_switcher(window, cx);
+            return;
+        };
+        let len = self.project_switcher.ordered_project_ids.len();
+        if len == 0 {
+            self.cancel_project_switcher(window, cx);
+            return;
+        }
+        let next = if reverse {
+            (current_index + len - 1) % len
+        } else {
+            (current_index + 1) % len
+        };
+        self.set_project_switcher_highlight(next, cx);
+    }
+
+    /// Only a New Task draft can retarget its project; elsewhere the chord is
+    /// inert. The draft's own project pins the head of the list so the first
+    /// press lands on the next most recent one.
+    fn open_project_switcher(
+        &mut self,
+        reverse: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(current_project) = self
+            .selected_session()
+            .filter(|session| !session.has_started() && !session.is_busy())
+            .map(|session| session.project_id)
+        else {
+            return;
+        };
+        let recent = self
+            .task_switcher
+            .recent_project_ids(&self.state.sessions);
+        let ordered = ordered_project_ids(Some(current_project), &recent, &self.state.projects);
+        let Some(highlighted_index) =
+            task_switcher::initial_highlight_index(&ordered, Some(current_project), reverse)
+        else {
+            return;
+        };
+
+        if self.task_switcher.is_open() {
+            self.cancel_task_switcher(window, cx);
+        }
+        if self.command_palette.is_open() {
+            self.toggle_command_palette_action(&ToggleCommandPalette, window, cx);
+        }
+        let open_menus = self
+            .menus
+            .borrow()
+            .values()
+            .filter(|menu| menu.is_open())
+            .cloned()
+            .collect::<Vec<_>>();
+        self.project_switcher.previous_focus = if open_menus.is_empty() {
+            window.focused(cx)
+        } else if self.settings_page.is_some() {
+            Some(self.settings_focus.clone())
+        } else {
+            Some(self.composer_focus(cx))
+        };
+
+        self.project_switcher.open = true;
+        self.project_switcher.ordered_project_ids = ordered;
+        self.project_switcher.highlighted_project_id = self
+            .project_switcher
+            .ordered_project_ids
+            .get(highlighted_index)
+            .copied();
+        self.project_switcher.original_session_id = self.state.selected_session;
+        self.project_switcher.reveal_highlight();
+        self.project_switcher.generation = self.project_switcher.generation.wrapping_add(1);
+        let generation = self.project_switcher.generation;
+        let focus = self.project_switcher.focus.clone();
+        let weak = cx.entity().downgrade();
+
+        if !open_menus.is_empty() {
+            window.defer(cx, move |window, cx| {
+                for menu in open_menus {
+                    menu.close(window, cx);
+                }
+            });
+        }
+
+        // Deferred overlays join the dispatch tree after their deferred paint.
+        // Two frames guarantees the switcher focus can resolve, while the root
+        // modifier listener still catches a very quick modifier release.
+        window.on_next_frame(move |window, _| {
+            window.on_next_frame(move |window, cx| {
+                let should_focus = weak
+                    .update(cx, |this, _| {
+                        this.project_switcher.open && this.project_switcher.generation == generation
+                    })
+                    .unwrap_or(false);
+                if should_focus {
+                    window.focus(&focus, cx);
+                }
+            });
+        });
+        cx.notify();
+    }
+
+    fn set_project_switcher_highlight(&mut self, index: usize, cx: &mut Context<Self>) {
+        let Some(project_id) = self
+            .project_switcher
+            .ordered_project_ids
+            .get(index)
+            .copied()
+        else {
+            return;
+        };
+        if self.project_switcher.highlighted_project_id == Some(project_id) {
+            return;
+        }
+        self.project_switcher.highlighted_project_id = Some(project_id);
+        self.project_switcher.reveal_highlight();
+        cx.notify();
+    }
+
+    fn finish_project_switcher(
+        &mut self,
+        pointer_selection: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if !self.project_switcher.open {
+            return;
+        }
+        let selected = self.project_switcher.highlighted_project_id;
+        let original = self.project_switcher.original_session_id;
+        let previous_focus = self.project_switcher.dismiss();
+        let may_commit = pointer_selection || self.state.selected_session == original;
+        let mut focus_after = previous_focus;
+        if may_commit
+            && let Some(project_id) = selected
+            && self
+                .state
+                .projects
+                .iter()
+                .any(|project| project.id == project_id)
+            && self
+                .selected_session()
+                .is_some_and(|session| !session.has_started())
+            && self
+                .selected_session()
+                .is_some_and(|session| session.project_id != project_id)
+        {
+            let was_in_settings = self.settings_page.is_some();
+            self.settings_page = None;
+            self.select_project_from_composer(project_id, cx);
+            if was_in_settings {
+                focus_after = Some(self.composer_focus(cx));
+            }
+        }
+        if let Some(previous_focus) = focus_after {
+            window.focus(&previous_focus, cx);
+        }
+        cx.notify();
+    }
+
+    pub(super) fn cancel_project_switcher(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if !self.project_switcher.open {
+            return;
+        }
+        if let Some(previous_focus) = self.project_switcher.dismiss() {
+            window.focus(&previous_focus, cx);
+        }
+        cx.notify();
+    }
+
+    fn render_project_switcher_entry(
+        &self,
+        project: &Project,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let theme = Theme::current(cx);
+        let project_id = project.id;
+        let highlighted = self.project_switcher.highlighted_project_id == Some(project_id);
+        let path = (!project.is_projectless()).then(|| {
+            settings::abbreviate_home_path(&project.path, self.home_directory.as_deref())
+        });
+
+        div()
+            .id(SharedString::from(format!(
+                "project-switcher-entry-{project_id}"
+            )))
+            .h(px(ROW_HEIGHT))
+            .w_full()
+            .flex_none()
+            .px(px(ROW_INSET_X))
+            .rounded(px(ROW_RADIUS))
+            .flex()
+            .items_center()
+            .gap(px(10.0))
+            .cursor_default()
+            .when(highlighted, |entry| entry.bg(theme.overlay_strong))
+            .hover(|entry| entry.bg(theme.overlay))
+            .on_mouse_move(cx.listener(move |this, _, _, cx| {
+                let Some(index) = this
+                    .project_switcher
+                    .ordered_project_ids
+                    .iter()
+                    .position(|candidate| *candidate == project_id)
+                else {
+                    return;
+                };
+                this.set_project_switcher_highlight(index, cx);
+            }))
+            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+            .on_click(cx.listener(move |this, _, window, cx| {
+                if this.project_switcher.open {
+                    this.project_switcher.highlighted_project_id = Some(project_id);
+                    this.finish_project_switcher(true, window, cx);
+                    cx.stop_propagation();
+                }
+            }))
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .truncate()
+                    .text_size(sp(13.0))
+                    .text_color(theme.text)
+                    .child(project.display_name()),
+            )
+            .when_some(path, |entry, path| {
+                entry.child(
+                    div()
+                        .flex_none()
+                        .max_w(px(PATH_MAX_WIDTH))
+                        .truncate()
+                        .text_size(sp(12.0))
+                        .text_color(theme.text_tertiary)
+                        .child(path),
+                )
+            })
+            .into_any_element()
+    }
+
+    pub(super) fn render_project_switcher(
+        &mut self,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) -> Option<AnyElement> {
+        if !self.project_switcher.open || self.project_switcher.ordered_project_ids.is_empty() {
+            return None;
+        }
+        let theme = Theme::current(cx);
+        let scroll = self.project_switcher.scroll.clone();
+        let focus = self.project_switcher.focus.clone();
+        let entries = self
+            .project_switcher
+            .ordered_project_ids
+            .iter()
+            .filter_map(|project_id| {
+                self.state
+                    .projects
+                    .iter()
+                    .find(|project| project.id == *project_id)
+            })
+            .map(|project| self.render_project_switcher_entry(project, cx))
+            .collect::<Vec<_>>();
+        let list_max_height = (f32::from(window.viewport_size().height)
+            - WINDOW_MARGIN * 2.0
+            - TITLE_HEIGHT
+            - MODAL_INSET * 2.0)
+            .max(ROW_HEIGHT);
+
+        let card = div()
+            .id("project-switcher")
+            .key_context("ProjectSwitcher")
+            .track_focus(&focus)
+            .w(px(MODAL_WIDTH))
+            .p(px(MODAL_INSET))
+            .flex()
+            .flex_col()
+            .overflow_hidden()
+            .rounded(px(MODAL_RADIUS))
+            .border_1()
+            .border_color(theme.border_strong)
+            .bg(theme.raised)
+            .shadow_xl()
+            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+            .child(
+                div()
+                    .h(px(TITLE_HEIGHT))
+                    .flex_none()
+                    .px(px(TITLE_INSET_X))
+                    .flex()
+                    .items_center()
+                    .text_size(sp(12.0))
+                    .font_weight(FontWeight::MEDIUM)
+                    .text_color(theme.text_tertiary)
+                    .child(tr!("project_switcher.recently_used")),
+            )
+            .child(
+                div()
+                    .id("project-switcher-list")
+                    .flex_none()
+                    .max_h(px(list_max_height))
+                    .overflow_y_scroll()
+                    .track_scroll(&scroll)
+                    .flex()
+                    .flex_col()
+                    .children(entries),
+            );
+        let layer = div()
+            .id("project-switcher-layer")
+            .absolute()
+            .inset_0()
+            .occlude()
+            .flex()
+            .items_center()
+            .justify_center()
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(|this, _, window, cx| this.cancel_project_switcher(window, cx)),
+            )
+            .child(card);
+        Some(gpui::deferred(layer).with_priority(6).into_any_element())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn switcher_order_contains_only_the_ten_most_recently_used_projects() {
+        let project = |_: ()| Project {
+            id: Uuid::new_v4(),
+            name: String::new(),
+            path: PathBuf::new(),
+            created_at: 0,
+        };
+        let current = project(());
+        let recent = (0..12).map(|_| project(())).collect::<Vec<_>>();
+        let removed = project(());
+        let mut projects = vec![current.clone()];
+        projects.extend(recent.iter().cloned());
+        let mut recorded_recency = vec![removed.id];
+        recorded_recency.extend(recent.iter().map(|project| project.id));
+        let mut expected = vec![current.id];
+        expected.extend(recent.iter().take(MAX_PROJECTS - 1).map(|project| project.id));
+
+        assert_eq!(
+            ordered_project_ids(Some(current.id), &recorded_recency, &projects),
+            expected
+        );
+    }
+}

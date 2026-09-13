@@ -142,6 +142,9 @@ command_palette.resume_failed:
 task_switcher.recently_viewed:
   en: Recently viewed
 
+project_switcher.recently_used:
+  en: Recently used
+
 language.title:
   en: Language
 language.system:

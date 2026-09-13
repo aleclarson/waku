@@ -80,6 +80,12 @@ actions!(
         SelectLastTask,
         ConfirmTaskSwitch,
         CancelTaskSwitch,
+        SwitchProjectForward,
+        SwitchProjectBackward,
+        SelectFirstProject,
+        SelectLastProject,
+        ConfirmProjectSwitch,
+        CancelProjectSwitch,
         FocusComposer,
         FocusTerminal,
         ToggleModelPicker,
@@ -256,6 +262,34 @@ pub fn run() {
                 KeyBinding::new("end", SelectLastTask, Some("TaskSwitcher")),
                 KeyBinding::new("enter", ConfirmTaskSwitch, Some("TaskSwitcher")),
                 KeyBinding::new("escape", CancelTaskSwitch, Some("TaskSwitcher")),
+                // The project switcher opens from a New Task draft and
+                // commits when the platform modifier is released, the same
+                // gesture as ctrl-tab above.
+                KeyBinding::new("secondary-e", SwitchProjectForward, Some("Waku")),
+                KeyBinding::new("secondary-shift-e", SwitchProjectBackward, Some("Waku")),
+                KeyBinding::new("secondary-escape", CancelProjectSwitch, Some("Waku")),
+                KeyBinding::new(
+                    "secondary-shift-escape",
+                    CancelProjectSwitch,
+                    Some("Waku"),
+                ),
+                // Re-bound on the overlay context so the chord keeps cycling
+                // when the switcher's focus path no longer passes "Waku"
+                // (the settings branch renders the layer as its sibling).
+                KeyBinding::new("secondary-e", SwitchProjectForward, Some("ProjectSwitcher")),
+                KeyBinding::new(
+                    "secondary-shift-e",
+                    SwitchProjectBackward,
+                    Some("ProjectSwitcher"),
+                ),
+                KeyBinding::new("down", SwitchProjectForward, Some("ProjectSwitcher")),
+                KeyBinding::new("right", SwitchProjectForward, Some("ProjectSwitcher")),
+                KeyBinding::new("up", SwitchProjectBackward, Some("ProjectSwitcher")),
+                KeyBinding::new("left", SwitchProjectBackward, Some("ProjectSwitcher")),
+                KeyBinding::new("home", SelectFirstProject, Some("ProjectSwitcher")),
+                KeyBinding::new("end", SelectLastProject, Some("ProjectSwitcher")),
+                KeyBinding::new("enter", ConfirmProjectSwitch, Some("ProjectSwitcher")),
+                KeyBinding::new("escape", CancelProjectSwitch, Some("ProjectSwitcher")),
                 KeyBinding::new("secondary-l", FocusComposer, None),
                 KeyBinding::new("secondary-j", FocusTerminal, None),
                 KeyBinding::new("secondary-/", ToggleModelPicker, None),

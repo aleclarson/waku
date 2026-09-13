@@ -66,13 +66,14 @@ use crate::ui::{
     icon_button, motion, provider_color, provider_mark, status_color, toggle_switch,
 };
 use crate::{
-    CancelTaskSwitch, CancelTurn, CloseFind, CloseWindow, ConfirmTaskSwitch, CopySelection,
-    CopyWorkingDirectory, FindNext, FindPrevious, FocusComposer, FocusTerminal, NavigateBack,
-    NavigateForward, NewProject, NewSession, OpenFind, OpenFindReplace, OpenResumePicker,
-    OpenSettings, ReplaceAllMatches, SaveFile, SelectFirstTask, SelectLastTask, SwitchTaskBackward,
-    SwitchTaskForward, ToggleCommandPalette, ToggleFindCaseSensitive, ToggleFindRegex,
-    ToggleFindWholeWord, ToggleFpsCounter, ToggleModelPicker, ToggleRightPanel, ToggleSidebar,
-    ToggleUsagePanel,
+    CancelProjectSwitch, CancelTaskSwitch, CancelTurn, CloseFind, CloseWindow,
+    ConfirmProjectSwitch, ConfirmTaskSwitch, CopySelection, CopyWorkingDirectory, FindNext,
+    FindPrevious, FocusComposer, FocusTerminal, NavigateBack, NavigateForward, NewProject,
+    NewSession, OpenFind, OpenFindReplace, OpenResumePicker, OpenSettings, ReplaceAllMatches,
+    SaveFile, SelectFirstProject, SelectFirstTask, SelectLastProject, SelectLastTask,
+    SwitchProjectBackward, SwitchProjectForward, SwitchTaskBackward, SwitchTaskForward,
+    ToggleCommandPalette, ToggleFindCaseSensitive, ToggleFindRegex, ToggleFindWholeWord,
+    ToggleFpsCounter, ToggleModelPicker, ToggleRightPanel, ToggleSidebar, ToggleUsagePanel,
 };
 
 #[cfg(target_os = "macos")]
@@ -1078,6 +1079,7 @@ pub struct Waku {
     composer_draft_save_generation: u64,
     command_palette: command_palette::CommandPaletteUi,
     task_switcher: task_switcher::TaskSwitcherUi,
+    project_switcher: project_switcher::ProjectSwitcherUi,
     model_search: Entity<TextInput>,
     settings_search: Entity<TextInput>,
     daemon_port_input: Entity<TextInput>,
@@ -1632,6 +1634,7 @@ mod drafts;
 mod file_search;
 mod goal_dialog;
 mod image_preview;
+mod project_switcher;
 mod render;
 mod right_panel;
 mod runtime;
@@ -2322,6 +2325,18 @@ impl Waku {
                 task_switcher.record_access(selected_session);
             }
 
+            let project_switcher_focus = cx.focus_handle();
+            cx.on_focus_out(
+                &project_switcher_focus,
+                window,
+                |this: &mut Self, _, window, cx| {
+                    this.cancel_project_switcher(window, cx);
+                },
+            )
+            .detach();
+            let project_switcher =
+                project_switcher::ProjectSwitcherUi::new(project_switcher_focus);
+
             cx.on_focus(&updater_button_focus, window, |this: &mut Self, _, cx| {
                 this.set_updater_button_focused(true, cx);
             })
@@ -2743,6 +2758,7 @@ impl Waku {
                 composer_draft_save_generation: 0,
                 command_palette: command_palette::CommandPaletteUi::new(command_palette_search),
                 task_switcher,
+                project_switcher,
                 model_search,
                 branch_search,
                 branch_create_input,

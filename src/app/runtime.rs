@@ -1072,6 +1072,7 @@ impl Waku {
             self.background_work.remove(session_id);
             self.remove_right_panel_session_state(*session_id);
             self.task_switcher.remove(*session_id);
+            self.project_switcher.session_removed(*session_id);
         }
         self.state.projects = snapshot.projects;
 

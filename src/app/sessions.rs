@@ -358,6 +358,7 @@ impl Waku {
         }
         self.session_navigation.remove(session_id);
         self.task_switcher.remove(session_id);
+        self.project_switcher.session_removed(session_id);
         let project_still_used = self
             .state
             .sessions
@@ -815,6 +816,10 @@ impl Waku {
         // cancels the provisional selection instead of reaching the session.
         if self.task_switcher.is_open() {
             self.cancel_task_switcher(window, cx);
+            return;
+        }
+        if self.project_switcher.is_open() {
+            self.cancel_project_switcher(window, cx);
             return;
         }
         if self.settings_page.take().is_some() {

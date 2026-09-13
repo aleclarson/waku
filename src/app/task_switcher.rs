@@ -52,6 +52,20 @@ impl TaskSwitcherUi {
         self.open
     }
 
+    /// Project ids in the order their tasks were last activated — the
+    /// "recently used" source the project switcher shares.
+    pub(super) fn recent_project_ids(&self, sessions: &[AgentSession]) -> Vec<Uuid> {
+        let mut seen = HashSet::new();
+        self.recent_session_ids
+            .iter()
+            .filter_map(|session_id| {
+                sessions.iter().find(|session| session.id == *session_id)
+            })
+            .map(|session| session.project_id)
+            .filter(|project_id| seen.insert(*project_id))
+            .collect()
+    }
+
     pub(super) fn record_access(&mut self, session_id: Uuid) {
         self.recent_session_ids
             .retain(|recent| *recent != session_id);
@@ -117,7 +131,7 @@ fn ordered_task_ids(current: Option<Uuid>, recent: &[Uuid], started_tasks: &[Uui
     ordered
 }
 
-fn initial_highlight_index(
+pub(super) fn initial_highlight_index(
     ordered: &[Uuid],
     current: Option<Uuid>,
     reverse: bool,
@@ -265,6 +279,9 @@ impl Waku {
             return;
         };
 
+        if self.project_switcher.is_open() {
+            self.cancel_project_switcher(window, cx);
+        }
         if self.command_palette.is_open() {
             self.toggle_command_palette_action(&ToggleCommandPalette, window, cx);
         }
