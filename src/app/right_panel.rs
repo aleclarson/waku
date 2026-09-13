@@ -1919,14 +1919,33 @@ impl Waku {
     /// fresh surface when the session has no terminal yet. The panel opens if
     /// it was hidden; without a selected session there is no working
     /// directory to spawn into, so the chord does nothing.
+    ///
+    /// When the terminal already holds focus the chord becomes a toggle: the
+    /// panel hides (surfaces and their sessions keep running) and focus
+    /// returns to the composer.
     pub(super) fn focus_terminal_action(
         &mut self,
         _: &FocusTerminal,
-        _: &mut Window,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         self.settings_page = None;
         if self.state.selected_session.is_none() {
+            cx.notify();
+            return;
+        }
+        let terminal_focused = self.right_panel_visible
+            && self
+                .active_right_panel_surface()
+                .and_then(RightPanelSurface::terminal_id)
+                .and_then(|terminal_id| self.right_panel_terminals.get(&terminal_id))
+                .is_some_and(|terminal| {
+                    terminal.read(cx).focus_handle(cx).is_focused(window)
+                });
+        if terminal_focused {
+            self.set_right_panel_visible(false, cx);
+            let focus_handle = self.composer_focus(cx);
+            window.focus(&focus_handle, cx);
             cx.notify();
             return;
         }
