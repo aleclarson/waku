@@ -515,7 +515,8 @@ impl PersistedState {
     pub fn remember_workspace(&mut self, project_id: Uuid, workspace: &SessionWorkspace) {
         match workspace {
             SessionWorkspace::Local | SessionWorkspace::NewWorktree { .. } => {
-                self.project_workspaces.insert(project_id, workspace.clone());
+                self.project_workspaces
+                    .insert(project_id, workspace.clone());
             }
             SessionWorkspace::Worktree { .. } => {}
         }

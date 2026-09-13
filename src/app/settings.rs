@@ -19,7 +19,7 @@ const SETTINGS_SEARCH_CONTEXT: &str = "SettingsSidebar > TextInput";
 
 /// The sidebar's rows in display order, each with the keyword haystack the
 /// search field filters against.
-const SETTINGS_PAGES: [(SettingsPage, &str, &str, &str); 7] = [
+const SETTINGS_PAGES: [(SettingsPage, &str, &str, &str); 8] = [
     (
         SettingsPage::General,
         "settings.general",
@@ -43,6 +43,12 @@ const SETTINGS_PAGES: [(SettingsPage, &str, &str, &str); 7] = [
         "settings.skills",
         "icons/package.svg",
         "settings.skills_keywords",
+    ),
+    (
+        SettingsPage::Archived,
+        "settings.archived",
+        "icons/archive.svg",
+        "settings.archived_keywords",
     ),
     (
         SettingsPage::Usage,
@@ -108,6 +114,7 @@ impl Waku {
             .on_action(cx.listener(Self::focus_composer_action))
             .on_action(cx.listener(Self::focus_terminal_action))
             .on_action(cx.listener(Self::cancel_turn_action))
+            .on_action(cx.listener(Self::archive_session_action))
             .capture_any_mouse_down(cx.listener(Self::navigation_mouse_down))
             .size_full()
             .flex()
@@ -359,6 +366,7 @@ impl Waku {
                         SettingsPage::General => tr!("settings.general"),
                         SettingsPage::Providers => tr!("settings.providers"),
                         SettingsPage::Skills => tr!("settings.skills"),
+                        SettingsPage::Archived => tr!("settings.archived"),
                         SettingsPage::Usage => tr!("settings.usage"),
                         SettingsPage::Daemon => tr!("settings.daemon"),
                         SettingsPage::ComputerUse => tr!("settings.computer_use"),
@@ -369,6 +377,7 @@ impl Waku {
                 SettingsPage::General => self.render_general_settings(cx),
                 SettingsPage::Providers => self.render_providers_settings(cx),
                 SettingsPage::Skills => self.render_skills_settings(cx),
+                SettingsPage::Archived => self.render_archived_settings(cx),
                 SettingsPage::Usage => self.render_usage_settings(cx),
                 SettingsPage::Daemon => self.render_daemon_settings(cx),
                 SettingsPage::ComputerUse => self.render_computer_use_settings(cx),
@@ -1284,6 +1293,171 @@ impl Waku {
         })
         .detach();
         cx.notify();
+    }
+
+    fn render_archived_settings(&self, cx: &mut Context<Self>) -> AnyElement {
+        let theme = Theme::current(cx);
+        let now = unix_time();
+        let mut archived = self
+            .state
+            .sessions
+            .iter()
+            .filter(|session| session.archived_at.is_some())
+            .collect::<Vec<_>>();
+        archived.sort_by(|a, b| b.archived_at.cmp(&a.archived_at));
+
+        let mut rows = div().mt(px(8.0)).flex().flex_col();
+        for session in archived {
+            let session_id = session.id;
+            let group = SharedString::from(format!("archived-chat-{session_id}"));
+            let project_name = self
+                .state
+                .projects
+                .iter()
+                .find(|project| project.id == session.project_id)
+                .map(Project::display_name)
+                .unwrap_or_else(|| tr!("project.no_project_name"));
+            let updated = super::sidebar::format_time_ago(now.saturating_sub(session.updated_at));
+            let detail = format!("{project_name} · {updated}");
+
+            let unarchive_button = div()
+                .id(SharedString::from(format!(
+                    "archived-chat-unarchive-{session_id}"
+                )))
+                .tab_index(0)
+                .h(px(27.0))
+                .px(px(9.0))
+                .rounded(px(6.0))
+                .flex()
+                .items_center()
+                .justify_center()
+                .cursor_default()
+                .text_size(sp(12.5))
+                .text_color(theme.text_secondary)
+                // Hover reveals the actions; keyboard focus has to reach the
+                // same buttons, so focus makes them visible too.
+                .opacity(0.0)
+                .group_hover(group.clone(), |element| element.opacity(1.0))
+                .focus_visible(|element| element.opacity(1.0).border_1().border_color(theme.accent))
+                .hover(|element| element.bg(theme.overlay))
+                .active(|element| element.bg(theme.overlay_strong))
+                .child(tr!("common.unarchive"))
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    this.unarchive_session(session_id, cx);
+                }))
+                .on_key_down(cx.listener(move |this, event: &KeyDownEvent, _, cx| {
+                    if !event.keystroke.modifiers.modified()
+                        && matches!(event.keystroke.key.as_str(), "enter" | "space")
+                    {
+                        this.unarchive_session(session_id, cx);
+                        cx.stop_propagation();
+                    }
+                }));
+
+            let remove_button = div()
+                .id(SharedString::from(format!(
+                    "archived-chat-remove-{session_id}"
+                )))
+                .tab_index(0)
+                .h(px(27.0))
+                .px(px(9.0))
+                .rounded(px(6.0))
+                .flex()
+                .items_center()
+                .justify_center()
+                .cursor_default()
+                .text_size(sp(12.5))
+                .text_color(theme.danger)
+                .opacity(0.0)
+                .group_hover(group.clone(), |element| element.opacity(1.0))
+                .focus_visible(|element| element.opacity(1.0).border_1().border_color(theme.accent))
+                .hover(|element| element.bg(theme.danger.opacity(0.12)))
+                .active(|element| element.bg(theme.danger.opacity(0.18)))
+                .child(tr!("common.remove"))
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    this.remove_session(session_id, cx);
+                }))
+                .on_key_down(cx.listener(move |this, event: &KeyDownEvent, _, cx| {
+                    if !event.keystroke.modifiers.modified()
+                        && matches!(event.keystroke.key.as_str(), "enter" | "space")
+                    {
+                        this.remove_session(session_id, cx);
+                        cx.stop_propagation();
+                    }
+                }));
+
+            rows = rows.child(
+                div()
+                    .group(group)
+                    .w_full()
+                    .px(px(12.0))
+                    .py(px(7.0))
+                    .rounded(px(8.0))
+                    .flex()
+                    .items_center()
+                    .gap(px(10.0))
+                    .hover(|element| element.bg(theme.sidebar_item_background))
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .flex()
+                            .flex_col()
+                            .child(
+                                div()
+                                    .text_size(sp(13.0))
+                                    .text_color(theme.text)
+                                    .overflow_hidden()
+                                    .whitespace_nowrap()
+                                    .text_ellipsis()
+                                    .child(session.display_title().to_owned()),
+                            )
+                            .child(
+                                div()
+                                    .mt(px(1.0))
+                                    .text_size(sp(11.5))
+                                    .text_color(theme.text_tertiary)
+                                    .child(detail),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .flex_none()
+                            .flex()
+                            .items_center()
+                            .gap(px(6.0))
+                            .child(unarchive_button)
+                            .child(remove_button),
+                    ),
+            );
+        }
+
+        let mut page = div()
+            .mt(px(15.0))
+            .w_full()
+            .child(
+                div()
+                    .text_size(sp(12.5))
+                    .line_height(sp(18.0))
+                    .text_color(theme.text_secondary)
+                    .child(tr!("settings.archived_description")),
+            )
+            .child(rows);
+        if self
+            .state
+            .sessions
+            .iter()
+            .all(|session| session.archived_at.is_none())
+        {
+            page = page.child(
+                div()
+                    .mt(px(12.0))
+                    .text_size(sp(13.0))
+                    .text_color(theme.text_tertiary)
+                    .child(tr!("settings.archived_empty")),
+            );
+        }
+        page.into_any_element()
     }
 
     fn render_appearance_settings(&self, cx: &mut Context<Self>) -> AnyElement {

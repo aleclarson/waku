@@ -94,6 +94,10 @@ settings.skills_keywords: スキル ライブラリ エージェント 無効 �
 settings.usage_keywords: 使用状況 トークン コスト 支出 キャッシュ 日別 グラフ モデル 内訳 履歴 claude codex
 settings.daemon_keywords: デーモン サーバー リモート ウェブ ネットワーク 公開 オリジン トークン ポート websocket
 settings.computer_use_keywords: コンピュータ 操作 画面収録 アクセシビリティ アプリ 制御 codex
+settings.archived: アーカイブ済みチャット
+settings.archived_keywords: アーカイブ チャット 会話 非表示 履歴 復元 削除
+settings.archived_description: アーカイブされたチャットはサイドバーと検索から非表示になります。アーカイブから30日以上経過したチャットは完全に削除されます。
+settings.archived_empty: アーカイブ済みのチャットはありません。
 settings.back: 戻る
 settings.search: 設定を検索
 daemon.expose_title: 管理対象デーモンを公開
@@ -240,10 +244,12 @@ computer_use.permission_check_failed: コンピュータ操作の権限を確認
 common.settings: 設定
 common.copy: コピー
 common.remove: 削除
+common.unarchive: アーカイブ解除
 common.rename: 名前を変更
 
 session.new_task: 新規タスク
 session.copy_working_directory: 作業ディレクトリをコピー
+session.archive: アーカイブ
 
 sidebar.today: 今日
 sidebar.search: 検索

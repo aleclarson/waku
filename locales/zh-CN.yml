@@ -91,6 +91,10 @@ settings.skills_keywords: 技能 技能库 智能体 禁用 启用 删除 claude
 settings.usage_keywords: 用量 令牌 费用 支出 缓存 每日 图表 模型 明细 历史 claude codex
 settings.daemon_keywords: 守护进程 服务 远程 网页 网络 暴露 来源 令牌 端口 websocket
 settings.computer_use_keywords: 电脑操作 屏幕录制 辅助功能 应用 控制 codex
+settings.archived: 已归档的聊天
+settings.archived_keywords: 已归档 聊天 对话 隐藏 历史 恢复 移除
+settings.archived_description: 已归档的聊天会从侧边栏和搜索中隐藏。归档超过 30 天的聊天将被永久移除。
+settings.archived_empty: 没有已归档的聊天。
 settings.back: 返回
 settings.search: 搜索设置
 daemon.expose_title: 暴露由 Waku 管理的守护进程
@@ -231,9 +235,11 @@ computer_use.permission_check_failed: 无法检查电脑操作权限
 common.settings: 设置
 common.copy: 复制
 common.remove: 移除
+common.unarchive: 取消归档
 common.rename: 重命名
 session.new_task: 新任务
 session.copy_working_directory: 复制工作目录
+session.archive: 归档
 sidebar.today: 今天
 sidebar.search: 搜索
 sidebar.options: 侧边栏选项

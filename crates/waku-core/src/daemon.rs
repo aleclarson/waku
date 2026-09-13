@@ -34,6 +34,11 @@ use waku_protocol::provider_session::{ProviderSessionFork, ProviderSessionForkRe
 /// requests, forks, checkpoints — and resident memory grows without bound.
 const RESIDENT_TRANSCRIPT_WINDOW: usize = 24;
 
+/// How long an archived task is kept, in seconds, before it is removed
+/// entirely. The sweep runs whenever task state loads rather than on a
+/// timer, so this bounds retention without scheduling exact deletions.
+const ARCHIVED_SESSION_RETENTION_SECONDS: u64 = 30 * 24 * 60 * 60;
+
 /// Releases resident transcripts beyond the recency window after a save.
 /// `pinned` names sessions with live runtimes; dirty sessions are skipped
 /// inside [`PersistedState::trim_idle_transcripts`] because they hold unsaved
@@ -78,7 +83,7 @@ impl WakuBackend {
             .parent()
             .unwrap_or_else(|| std::path::Path::new("."))
             .to_owned();
-        Ok(Self {
+        let backend = Self {
             sessions: Mutex::new(HashMap::new()),
             terminals: Mutex::new(HashMap::new()),
             #[cfg(all(test, unix))]
@@ -93,7 +98,9 @@ impl WakuBackend {
             checkpoint_capture_locks: Mutex::new(HashMap::new()),
             usage_rates_dir,
             default_cwd: std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from(".")),
-        })
+        };
+        backend.purge_expired_archived_sessions();
+        Ok(backend)
     }
 
     #[cfg(all(test, unix))]
@@ -186,6 +193,85 @@ impl WakuBackend {
             }
         }
         Ok(checkpoint)
+    }
+
+    /// Removes one task from daemon state and storage. The id is remembered
+    /// so a stale client `SaveTaskState` cannot restore the row, and any live
+    /// runtime is dropped with it.
+    fn remove_session(&self, session_id: Uuid) -> anyhow::Result<()> {
+        {
+            let mut state = self.task_state.lock();
+            self.removed_session_ids.lock().insert(session_id);
+            let project_id = state
+                .sessions
+                .iter()
+                .find(|session| session.id == session_id)
+                .map(|session| session.project_id);
+            state.sessions.retain(|session| session.id != session_id);
+            if let Some(project_id) = project_id {
+                let remove_project = state
+                    .projects
+                    .iter()
+                    .find(|project| project.id == project_id)
+                    .is_some_and(Project::is_projectless)
+                    && !state
+                        .sessions
+                        .iter()
+                        .any(|session| session.project_id == project_id);
+                if remove_project {
+                    state.projects.retain(|project| project.id != project_id);
+                }
+            }
+            self.task_store.save(&mut state)?;
+        }
+        let removed = self.sessions.lock().remove(&session_id);
+        drop(removed);
+        Ok(())
+    }
+
+    /// Deletes archived tasks whose archive has outlived the retention
+    /// window.
+    ///
+    /// Runs whenever task state loads — daemon startup and every client
+    /// `LoadTaskState` — so retention does not depend on a timer inside a
+    /// daemon clients may keep alive for weeks. As with ordinary removal, the
+    /// task's Git worktree is deliberately left on disk; only its checkpoint
+    /// refs are deleted.
+    fn purge_expired_archived_sessions(&self) {
+        let cutoff = crate::model::unix_time().saturating_sub(ARCHIVED_SESSION_RETENTION_SECONDS);
+        // Hydrating learns the real workspace directory — the list projection
+        // leaves it `Local` — so each expired task's checkpoint refs can be
+        // deleted in its own repository the way a client's Remove does.
+        let expired = {
+            let mut state = self.task_state.lock();
+            let mut expired = Vec::new();
+            for index in 0..state.sessions.len() {
+                if state.sessions[index]
+                    .archived_at
+                    .is_none_or(|archived_at| archived_at > cutoff)
+                {
+                    continue;
+                }
+                let session_id = state.sessions[index].id;
+                let _ = self.task_store.hydrate(&mut state.sessions[index]);
+                let session = &state.sessions[index];
+                let workspace = session.workspace.path().map(Path::to_path_buf).or_else(|| {
+                    state
+                        .projects
+                        .iter()
+                        .find(|project| project.id == session.project_id)
+                        .map(|project| project.path.clone())
+                });
+                expired.push((session_id, workspace));
+            }
+            expired
+        };
+        for (session_id, workspace) in expired {
+            if let Some(cwd) = workspace {
+                let _ = crate::checkpoint::delete_all_session_refs(&cwd, session_id);
+            }
+            let _ = self.remove_session(session_id);
+        }
     }
 }
 
@@ -338,6 +424,7 @@ impl Backend for WakuBackend {
                 Ok(ResponsePayload::Ack)
             }
             Command::LoadTaskState => {
+                self.purge_expired_archived_sessions();
                 let state = self.task_state.lock();
                 Ok(ResponsePayload::TaskState {
                     projects: state.projects.clone(),
@@ -432,33 +519,7 @@ impl Backend for WakuBackend {
                 Ok(ResponsePayload::TaskStateSaved { sessions })
             }
             Command::RemoveSession => {
-                {
-                    let mut state = self.task_state.lock();
-                    self.removed_session_ids.lock().insert(session_id);
-                    let project_id = state
-                        .sessions
-                        .iter()
-                        .find(|session| session.id == session_id)
-                        .map(|session| session.project_id);
-                    state.sessions.retain(|session| session.id != session_id);
-                    if let Some(project_id) = project_id {
-                        let remove_project = state
-                            .projects
-                            .iter()
-                            .find(|project| project.id == project_id)
-                            .is_some_and(Project::is_projectless)
-                            && !state
-                                .sessions
-                                .iter()
-                                .any(|session| session.project_id == project_id);
-                        if remove_project {
-                            state.projects.retain(|project| project.id != project_id);
-                        }
-                    }
-                    self.task_store.save(&mut state)?;
-                }
-                let removed = self.sessions.lock().remove(&session_id);
-                drop(removed);
+                self.remove_session(session_id)?;
                 Ok(ResponsePayload::Ack)
             }
             Command::HydrateSession { session_id } => {
@@ -922,6 +983,7 @@ fn merge_stale_session_metadata(existing: &mut AgentSession, incoming: AgentSess
         existing.agent_preset = incoming.agent_preset;
         existing.updated_at = incoming.updated_at;
         existing.last_reply_at = incoming.last_reply_at.or(existing.last_reply_at);
+        existing.archived_at = incoming.archived_at;
     }
     for queued in incoming.queued_messages {
         if !existing
@@ -2215,6 +2277,62 @@ mod tests {
         preserve_daemon_checkpoints(&existing, &mut incoming);
 
         assert_eq!(incoming.turns[0].checkpoint.as_ref(), Some(&checkpoint));
+    }
+
+    #[test]
+    fn expired_archives_are_purged_when_state_loads() {
+        let root = std::env::temp_dir().join(format!("waku-archive-{}", Uuid::new_v4()));
+        let store = StateStore::daemon(root.join("app.db"));
+        let mut state = PersistedState::fresh(root.join("repo"));
+        let expired_id = state.sessions[0].id;
+        state.sessions[0].begin_turn("expired archive");
+        state.sessions[0].finish_active_turn(crate::model::TurnStatus::Completed);
+        state.sessions[0].archived_at =
+            Some(crate::model::unix_time() - ARCHIVED_SESSION_RETENTION_SECONDS - 1);
+
+        let project_id = state.projects[0].id;
+        let mut recent = AgentSession::new(project_id, ProviderKind::Codex);
+        recent.begin_turn("recent archive");
+        recent.finish_active_turn(crate::model::TurnStatus::Completed);
+        recent.archived_at = Some(crate::model::unix_time());
+        let recent_id = recent.id;
+        state.push_session(recent);
+
+        let mut active = AgentSession::new(project_id, ProviderKind::Codex);
+        active.begin_turn("still active");
+        active.finish_active_turn(crate::model::TurnStatus::Completed);
+        let active_id = active.id;
+        state.push_session(active);
+        store.save(&mut state).unwrap();
+
+        let backend = WakuBackend::new(
+            DaemonSettingsStore::open(root.join("settings.json")).unwrap(),
+            store,
+        )
+        .unwrap();
+        let remaining = backend.task_state.lock().sessions.clone();
+        assert!(
+            !remaining.iter().any(|session| session.id == expired_id),
+            "an archive past the retention window is removed on load"
+        );
+        assert!(
+            remaining
+                .iter()
+                .any(|session| session.id == recent_id && session.archived_at.is_some()),
+            "a recent archive survives the sweep and stays archived"
+        );
+        assert!(remaining.iter().any(|session| session.id == active_id));
+
+        // The row is gone from storage too, so it cannot come back.
+        let reloaded = StateStore::daemon(root.join("app.db")).load().unwrap();
+        assert!(
+            !reloaded
+                .sessions
+                .iter()
+                .any(|session| session.id == expired_id)
+        );
+
+        std::fs::remove_dir_all(root).ok();
     }
 
     #[test]

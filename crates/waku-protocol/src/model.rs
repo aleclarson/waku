@@ -994,6 +994,12 @@ pub struct AgentSession {
     /// then refreshed when the turn settles, whatever its outcome.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last_reply_at: Option<u64>,
+    /// When the session was archived, unix seconds. `None` while the session
+    /// is active. Archived sessions are hidden from task lists and search,
+    /// and are purged entirely once the archive outlives its retention
+    /// window.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub archived_at: Option<u64>,
     #[serde(default)]
     pub provider_cursor: Option<ProviderResumeCursor>,
     /// Slash commands the provider reported for this session's live process,
@@ -1063,6 +1069,7 @@ impl AgentSession {
             created_at: now,
             updated_at: now,
             last_reply_at: None,
+            archived_at: None,
             detail_loaded: true,
             provider_cursor: None,
             available_commands: Vec::new(),
@@ -1100,6 +1107,7 @@ impl AgentSession {
             created_at: self.created_at,
             updated_at: self.updated_at,
             last_reply_at: self.last_reply_at,
+            archived_at: self.archived_at,
             provider_cursor: None,
             available_commands: Vec::new(),
             thread_goal: None,

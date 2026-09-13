@@ -58,9 +58,7 @@ impl TaskSwitcherUi {
         let mut seen = HashSet::new();
         self.recent_session_ids
             .iter()
-            .filter_map(|session_id| {
-                sessions.iter().find(|session| session.id == *session_id)
-            })
+            .filter_map(|session_id| sessions.iter().find(|session| session.id == *session_id))
             .map(|session| session.project_id)
             .filter(|project_id| seen.insert(*project_id))
             .collect()
@@ -265,7 +263,7 @@ impl Waku {
             .state
             .sessions
             .iter()
-            .filter(|session| session.has_started())
+            .filter(|session| session.has_started() && session.archived_at.is_none())
             .map(|session| session.id)
             .collect::<Vec<_>>();
         let ordered = ordered_task_ids(
@@ -368,11 +366,9 @@ impl Waku {
         let mut focus_after = previous_focus;
         if may_commit
             && let Some(selected) = selected
-            && self
-                .state
-                .sessions
-                .iter()
-                .any(|session| session.id == selected && session.has_started())
+            && self.state.sessions.iter().any(|session| {
+                session.id == selected && session.has_started() && session.archived_at.is_none()
+            })
         {
             let was_in_settings = self.settings_page.is_some();
             self.settings_page = None;

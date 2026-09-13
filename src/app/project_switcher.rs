@@ -81,11 +81,7 @@ impl ProjectSwitcherUi {
     }
 }
 
-fn ordered_project_ids(
-    current: Option<Uuid>,
-    recent: &[Uuid],
-    projects: &[Project],
-) -> Vec<Uuid> {
+fn ordered_project_ids(current: Option<Uuid>, recent: &[Uuid], projects: &[Project]) -> Vec<Uuid> {
     let valid = projects
         .iter()
         .map(|project| project.id)
@@ -231,9 +227,7 @@ impl Waku {
         else {
             return;
         };
-        let recent = self
-            .task_switcher
-            .recent_project_ids(&self.state.sessions);
+        let recent = self.task_switcher.recent_project_ids(&self.state.sessions);
         let ordered = ordered_project_ids(Some(current_project), &recent, &self.state.projects);
         let Some(highlighted_index) =
             task_switcher::initial_highlight_index(&ordered, Some(current_project), reverse)
@@ -378,9 +372,8 @@ impl Waku {
         let theme = Theme::current(cx);
         let project_id = project.id;
         let highlighted = self.project_switcher.highlighted_project_id == Some(project_id);
-        let path = (!project.is_projectless()).then(|| {
-            settings::abbreviate_home_path(&project.path, self.home_directory.as_deref())
-        });
+        let path = (!project.is_projectless())
+            .then(|| settings::abbreviate_home_path(&project.path, self.home_directory.as_deref()));
 
         div()
             .id(SharedString::from(format!(
@@ -543,7 +536,12 @@ mod tests {
         let mut recorded_recency = vec![removed.id];
         recorded_recency.extend(recent.iter().map(|project| project.id));
         let mut expected = vec![current.id];
-        expected.extend(recent.iter().take(MAX_PROJECTS - 1).map(|project| project.id));
+        expected.extend(
+            recent
+                .iter()
+                .take(MAX_PROJECTS - 1)
+                .map(|project| project.id),
+        );
 
         assert_eq!(
             ordered_project_ids(Some(current.id), &recorded_recency, &projects),

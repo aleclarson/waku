@@ -182,6 +182,14 @@ settings.daemon_keywords:
   en: daemon server remote web network expose origin token port websocket
 settings.computer_use_keywords:
   en: computer use screen recording accessibility apps control codex
+settings.archived:
+  en: Archived chats
+settings.archived_keywords:
+  en: archived chats conversations hidden history restore unarchive remove
+settings.archived_description:
+  en: Archived chats are hidden from the sidebar and search. Chats archived more than 30 days ago are permanently removed.
+settings.archived_empty:
+  en: No archived chats.
 settings.back:
   en: Back
 settings.search:
@@ -474,6 +482,8 @@ common.copy:
   en: Copy
 common.remove:
   en: Remove
+common.unarchive:
+  en: Unarchive
 common.rename:
   en: Rename
 
@@ -481,6 +491,8 @@ session.new_task:
   en: New task
 session.copy_working_directory:
   en: Copy Working Directory
+session.archive:
+  en: Archive
 
 sidebar.today:
   en: Today

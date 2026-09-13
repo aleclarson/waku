@@ -93,6 +93,7 @@ actions!(
         ToggleUsagePanel,
         SaveFile,
         CancelTurn,
+        ArchiveSession,
         CopySelection,
         CopyWorkingDirectory,
         OpenFind,
@@ -272,11 +273,7 @@ pub fn run() {
                 KeyBinding::new("secondary-e", SwitchProjectForward, Some("Waku")),
                 KeyBinding::new("secondary-shift-e", SwitchProjectBackward, Some("Waku")),
                 KeyBinding::new("secondary-escape", CancelProjectSwitch, Some("Waku")),
-                KeyBinding::new(
-                    "secondary-shift-escape",
-                    CancelProjectSwitch,
-                    Some("Waku"),
-                ),
+                KeyBinding::new("secondary-shift-escape", CancelProjectSwitch, Some("Waku")),
                 // Re-bound on the overlay context so the chord keeps cycling
                 // when the switcher's focus path no longer passes "Waku"
                 // (the settings branch renders the layer as its sibling).
@@ -300,6 +297,7 @@ pub fn run() {
                 KeyBinding::new("secondary-u", ToggleUsagePanel, None),
                 KeyBinding::new("secondary-s", SaveFile, None),
                 KeyBinding::new("escape", CancelTurn, Some("Waku")),
+                KeyBinding::new("secondary-shift-a", ArchiveSession, Some("Waku")),
                 KeyBinding::new("secondary-c", CopySelection, Some("Waku")),
                 KeyBinding::new("secondary-shift-c", CopyWorkingDirectory, Some("Waku")),
                 // Find and replace in the right panel's file editor, on the

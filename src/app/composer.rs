@@ -928,9 +928,8 @@ impl Waku {
                         let unknown = this.provider_detection_checked_at.is_none()
                             && matches!(remembered, ModelPickerTab::Provider(_));
                         if !usable && !unknown {
-                            let provider = session
-                                .map(|session| session.provider)
-                                .unwrap_or_default();
+                            let provider =
+                                session.map(|session| session.provider).unwrap_or_default();
                             let provider = if locked_provider.is_none()
                                 && this.state.disabled_providers.contains(&provider)
                             {

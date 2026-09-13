@@ -60,6 +60,16 @@ impl Waku {
         {
             return;
         }
+        // Archived tasks stay reachable through explicit activation paths like
+        // notification clicks; opening one is intent to bring it back.
+        if self
+            .state
+            .sessions
+            .iter()
+            .any(|session| session.id == session_id && session.archived_at.is_some())
+        {
+            self.unarchive_session(session_id, cx);
+        }
         self.reveal_sidebar_session(session_id);
         let needs_hydration = self
             .state
@@ -409,21 +419,7 @@ impl Waku {
         self.invalidate_checkpoint_refs();
 
         if was_selected {
-            self.state.selected_session = None;
-            let next_session = self
-                .state
-                .sessions
-                .iter()
-                .filter(|session| session.project_id == project_id)
-                .max_by_key(|session| session.updated_at)
-                .map(|session| session.id);
-            if let Some(session_id) = next_session {
-                self.select_session(session_id, cx);
-            } else if projectless {
-                self.create_projectless_session(cx);
-            } else {
-                self.create_session_for(project_id, self.state.last_provider, cx);
-            }
+            self.select_session_fallback(project_id, projectless, cx);
         } else {
             self.save();
             cx.notify();
@@ -436,6 +432,115 @@ impl Waku {
         cx.background_executor()
             .spawn(async move { sweep() })
             .detach();
+    }
+
+    /// Moves selection to the project task a departing session leaves behind:
+    /// the most recently updated unarchived one, or a fresh draft.
+    fn select_session_fallback(
+        &mut self,
+        project_id: Uuid,
+        projectless: bool,
+        cx: &mut Context<Self>,
+    ) {
+        self.state.selected_session = None;
+        let next_session = self
+            .state
+            .sessions
+            .iter()
+            .filter(|session| session.project_id == project_id && session.archived_at.is_none())
+            .max_by_key(|session| session.updated_at)
+            .map(|session| session.id);
+        if let Some(session_id) = next_session {
+            self.select_session(session_id, cx);
+        } else if projectless {
+            self.create_projectless_session(cx);
+        } else {
+            self.create_session_for(project_id, self.state.last_provider, cx);
+        }
+    }
+
+    /// Hides a task from the sidebar and search without deleting it.
+    ///
+    /// An active turn is stopped first — a hidden session must not keep
+    /// working. Archiving never touches the task's worktree; the daemon purges
+    /// archives once they outlive the retention window.
+    pub(super) fn archive_session(&mut self, session_id: Uuid, cx: &mut Context<Self>) {
+        let Some((project_id, is_busy)) = self
+            .state
+            .sessions
+            .iter()
+            .find(|session| session.id == session_id)
+            .filter(|session| session.has_started() && session.archived_at.is_none())
+            .map(|session| (session.project_id, session.is_busy()))
+        else {
+            return;
+        };
+        if is_busy {
+            self.cancel_session_turn(session_id, cx);
+        }
+        let projectless = self
+            .state
+            .projects
+            .iter()
+            .find(|project| project.id == project_id)
+            .is_some_and(Project::is_projectless);
+        let was_selected = self.state.selected_session == Some(session_id);
+        if self
+            .pending_session_activation
+            .is_some_and(|pending| pending.session_id == session_id)
+        {
+            self.pending_session_activation = None;
+        }
+        self.session_navigation.remove(session_id);
+        self.task_switcher.remove(session_id);
+        self.project_switcher.session_removed(session_id);
+        let now = unix_time();
+        if let Some(session) = self.state.session_mut(session_id) {
+            session.archived_at = Some(now);
+            // Archiving is a mutation: bumping `updated_at` keeps merge
+            // precedence honest so a stale client save cannot resurrect or
+            // clobber the flag.
+            session.updated_at = now;
+        }
+        if was_selected {
+            self.select_session_fallback(project_id, projectless, cx);
+        } else {
+            self.save();
+            cx.notify();
+        }
+    }
+
+    /// Returns an archived task to the sidebar and search.
+    pub(super) fn unarchive_session(&mut self, session_id: Uuid, cx: &mut Context<Self>) {
+        let Some(session) = self
+            .state
+            .sessions
+            .iter()
+            .find(|session| session.id == session_id)
+        else {
+            return;
+        };
+        if session.archived_at.is_none() {
+            return;
+        }
+        let now = unix_time();
+        if let Some(session) = self.state.session_mut(session_id) {
+            session.archived_at = None;
+            session.updated_at = now;
+        }
+        self.save();
+        cx.notify();
+    }
+
+    pub(super) fn archive_session_action(
+        &mut self,
+        _: &ArchiveSession,
+        _: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(session_id) = self.state.selected_session {
+            self.archive_session(session_id, cx);
+        }
     }
 
     pub(super) fn new_session_action(
@@ -1242,6 +1347,11 @@ impl Waku {
         let Some(session_id) = self.state.selected_session else {
             return;
         };
+        self.cancel_session_turn(session_id, cx);
+    }
+
+    fn cancel_session_turn(&mut self, session_id: Uuid, cx: &mut Context<Self>) {
+        self.escape_stop_confirmation.clear();
         // Worktree/checkpoint preparation has no safe interrupt contract. The
         // composer deliberately shows a spinner rather than Stop until the
         // provider runtime exists, and the keyboard action follows the same

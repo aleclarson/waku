@@ -1178,7 +1178,7 @@ impl Waku {
             },
         );
         for session in &self.state.sessions {
-            if !session.has_started() {
+            if !session.has_started() || session.archived_at.is_some() {
                 continue;
             }
             fingerprint = mix_uuid(fingerprint, session.id);
@@ -1235,7 +1235,7 @@ impl Waku {
             .state
             .sessions
             .iter()
-            .filter(|session| session.has_started())
+            .filter(|session| session.has_started() && session.archived_at.is_none())
             .collect::<Vec<_>>();
         sort_sidebar_sessions(&mut sorted_sessions, self.state.sidebar_ordering);
 
@@ -1949,12 +1949,7 @@ impl Waku {
                                     .flex()
                                     .items_center()
                                     .justify_center()
-                                    .child(
-                                        div()
-                                            .size(px(7.0))
-                                            .rounded_full()
-                                            .bg(theme.info),
-                                    ),
+                                    .child(div().size(px(7.0)).rounded_full().bg(theme.info)),
                             )
                         },
                     ),
@@ -2037,6 +2032,7 @@ impl Waku {
                 move |_| {
                     let rename_waku = waku.clone();
                     let copy_waku = waku.clone();
+                    let archive_waku = waku.clone();
                     let remove_waku = waku.clone();
                     vec![
                         MenuItem::new(tr!("common.rename"), move |window, cx| {
@@ -2044,14 +2040,15 @@ impl Waku {
                                 waku.begin_session_rename(session_id, window, cx);
                             });
                         }),
-                        MenuItem::new(
-                            tr!("session.copy_working_directory"),
-                            move |_, cx| {
-                                let _ = copy_waku.update(cx, |waku, cx| {
-                                    waku.copy_session_working_directory(session_id, cx);
-                                });
-                            },
-                        ),
+                        MenuItem::new(tr!("session.copy_working_directory"), move |_, cx| {
+                            let _ = copy_waku.update(cx, |waku, cx| {
+                                waku.copy_session_working_directory(session_id, cx);
+                            });
+                        }),
+                        MenuItem::new(tr!("session.archive"), move |_, cx| {
+                            let _ = archive_waku
+                                .update(cx, |waku, cx| waku.archive_session(session_id, cx));
+                        }),
                         MenuItem::Separator,
                         MenuItem::new(tr!("common.remove"), move |_, cx| {
                             let _ = remove_waku

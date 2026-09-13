@@ -66,7 +66,7 @@ use crate::ui::{
     icon_button, motion, provider_color, provider_mark, status_color, toggle_switch,
 };
 use crate::{
-    CancelProjectSwitch, CancelTaskSwitch, CancelTurn, CloseFind, CloseWindow,
+    ArchiveSession, CancelProjectSwitch, CancelTaskSwitch, CancelTurn, CloseFind, CloseWindow,
     ConfirmProjectSwitch, ConfirmTaskSwitch, CopySelection, CopyWorkingDirectory, FindNext,
     FindPrevious, FocusComposer, FocusTerminal, GoToLatestUnseenCompletion, NavigateBack,
     NavigateForward, NewProject, NewSession, OpenFind, OpenFindReplace, OpenResumePicker,
@@ -218,6 +218,7 @@ enum SettingsPage {
     General,
     Providers,
     Skills,
+    Archived,
     Usage,
     Daemon,
     ComputerUse,
@@ -2336,8 +2337,7 @@ impl Waku {
                 },
             )
             .detach();
-            let project_switcher =
-                project_switcher::ProjectSwitcherUi::new(project_switcher_focus);
+            let project_switcher = project_switcher::ProjectSwitcherUi::new(project_switcher_focus);
 
             cx.on_focus(&updater_button_focus, window, |this: &mut Self, _, cx| {
                 this.set_updater_button_focused(true, cx);

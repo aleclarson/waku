@@ -42,6 +42,8 @@ export const sessions = sqliteTable(
     updatedAt: integer("updated_at").notNull(),
     /** Completion of the most recent assistant turn, unix seconds. */
     lastReplyAt: integer("last_reply_at"),
+    /** When the session was archived, unix seconds; NULL while active. */
+    archivedAt: integer("archived_at"),
   },
   (table) => [
     index("sessions_by_project").on(table.projectId, table.updatedAt),
