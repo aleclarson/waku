@@ -2793,8 +2793,21 @@ fn permission_status_row(
 
 #[cfg(test)]
 mod tests {
-    use super::abbreviate_home_path;
+    use super::{SETTINGS_PAGES, abbreviate_home_path};
     use std::path::Path;
+
+    #[test]
+    fn every_settings_page_icon_is_embedded() {
+        use crate::assets::Assets;
+        use gpui::AssetSource;
+
+        for (.., icon, _) in SETTINGS_PAGES {
+            assert!(
+                Assets.load(icon).unwrap().is_some(),
+                "missing embedded icon: {icon}"
+            );
+        }
+    }
 
     #[test]
     fn provider_paths_abbreviate_only_the_home_prefix() {
