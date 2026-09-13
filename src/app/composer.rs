@@ -904,18 +904,36 @@ impl Waku {
                 let _ = reset_weak.update(cx, |this, cx| {
                     if open {
                         empty = this.model_picker_has_no_providers();
-                        let provider = this
-                            .selected_session()
-                            .map(|session| session.provider)
-                            .unwrap_or_default();
-                        // A draft can sit on a provider that was since switched
-                        // off; open onto the first usable provider instead of a
-                        // tab whose rows the filter would leave empty.
-                        let locked = this
-                            .selected_session()
-                            .is_some_and(|session| !session.messages.is_empty());
-                        let provider =
-                            if !locked && this.state.disabled_providers.contains(&provider) {
+                        let session = this.selected_session();
+                        let locked_provider = session
+                            .filter(|session| !session.messages.is_empty())
+                            .map(|session| session.provider);
+                        // The picker reopens on the rail it was last left on.
+                        // A remembered tab only falls back when it can no
+                        // longer be drawn — its provider switched off, or
+                        // another provider holding the session lock. Before
+                        // detection settles an unlisted provider tab is "not
+                        // known yet", not unusable, so it survives too. The
+                        // fallback is the session's provider — or, for a draft
+                        // sitting on a provider since switched off, the first
+                        // usable one rather than a tab whose rows the filter
+                        // would leave empty.
+                        let remembered = this.model_picker_tab;
+                        let usable = visible_picker_tabs(
+                            &this.probes,
+                            &this.state.disabled_providers,
+                            locked_provider,
+                        )
+                        .contains(&remembered);
+                        let unknown = this.provider_detection_checked_at.is_none()
+                            && matches!(remembered, ModelPickerTab::Provider(_));
+                        if !usable && !unknown {
+                            let provider = session
+                                .map(|session| session.provider)
+                                .unwrap_or_default();
+                            let provider = if locked_provider.is_none()
+                                && this.state.disabled_providers.contains(&provider)
+                            {
                                 ProviderKind::ALL
                                     .into_iter()
                                     .find(|kind| this.provider_enabled(*kind))
@@ -923,11 +941,15 @@ impl Waku {
                             } else {
                                 provider
                             };
-                        this.model_picker_tab = ModelPickerTab::Provider(provider);
-                        // Opening re-runs the tab's catalog discovery so models
-                        // authored since launch appear without a restart; the
-                        // other rails refresh when selected, not all at once.
-                        this.refresh_provider_model_discovery(provider);
+                            this.model_picker_tab = ModelPickerTab::Provider(provider);
+                        }
+                        // Opening re-runs the shown tab's catalog discovery so
+                        // models authored since launch appear without a
+                        // restart; the other rails refresh when selected, not
+                        // all at once.
+                        if let ModelPickerTab::Provider(provider) = this.model_picker_tab {
+                            this.refresh_provider_model_discovery(provider);
+                        }
                         this.model_picker_highlight = None;
                         reset_search.update(cx, |search, cx| search.clear(cx));
                         this.reveal_selected_picker_model();
