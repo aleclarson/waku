@@ -77,6 +77,9 @@ pub(super) struct AnnotationHover {
 /// Each passage is quoted and labelled so the agent can cite the comment's
 /// target; the trailing instruction is what makes the labels usable.
 pub(super) fn annotation_prompt_prefix(annotations: &[TranscriptAnnotation]) -> String {
+    if annotations.is_empty() {
+        return String::new();
+    }
     let mut out = String::new();
     for (index, annotation) in annotations.iter().enumerate() {
         out.push_str(&format!("Annotation {}:\n", index + 1));
@@ -801,6 +804,11 @@ mod tests {
             }],
             comment: comment.to_owned(),
         }
+    }
+
+    #[test]
+    fn prompt_prefix_is_empty_without_annotations() {
+        assert_eq!(annotation_prompt_prefix(&[]), "");
     }
 
     #[test]
