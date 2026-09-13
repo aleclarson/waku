@@ -30,6 +30,10 @@ const PULSE_LEASE: Duration = Duration::from_millis(300);
 /// The rotating `loader-circle` spinners' period.
 const SPINNER_PERIOD: Duration = Duration::from_millis(900);
 
+/// The `spin_slow` loaders' period: beside a session title or status row the
+/// shared period reads as a chase, so one orbit takes twice as long.
+const SPINNER_PERIOD_SLOW: Duration = Duration::from_millis(1_800);
+
 struct Lease {
     until: Instant,
     /// Notify this view every `stride`-th tick. A view's whole subtree
@@ -154,19 +158,19 @@ pub fn pulse(period: Duration, render: impl FnOnce(f32) -> AnyElement + 'static)
 
 /// A rotating loader icon riding the shared clock at up to 60 fps.
 pub fn spin(icon: Svg) -> AnyElement {
-    spin_with_stride(icon, 1)
+    spin_with(icon, SPINNER_PERIOD, 1)
 }
 
-/// A rotating loader at every second tick (~30 fps).
+/// A rotating loader at every second tick (~30 fps) on a slower period.
 /// For loaders on expensive surfaces: the
 /// sidebar rebuilds its whole subtree per notify, and a session row's working
 /// spinner is not worth pricing that at full rate.
 pub fn spin_slow(icon: Svg) -> AnyElement {
-    spin_with_stride(icon, 2)
+    spin_with(icon, SPINNER_PERIOD_SLOW, 2)
 }
 
-fn spin_with_stride(icon: Svg, stride: u32) -> AnyElement {
-    let mut pulse = pulse(SPINNER_PERIOD, move |phase| {
+fn spin_with(icon: Svg, period: Duration, stride: u32) -> AnyElement {
+    let mut pulse = pulse(period, move |phase| {
         icon.with_transformation(Transformation::rotate(percentage(phase)))
             .into_any_element()
     });
