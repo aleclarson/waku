@@ -3,11 +3,7 @@ use super::*;
 impl Waku {
     pub(super) fn finish_streaming_assistant(&mut self, session_id: Uuid) {
         if let Some(session) = self.state.session_mut(session_id) {
-            for message in &mut session.messages {
-                if message.role == MessageRole::Assistant && message.streaming {
-                    message.streaming = false;
-                }
-            }
+            finish_streaming_messages(session);
         }
     }
 
@@ -179,11 +175,7 @@ impl Waku {
 
     pub(super) fn complete_turn_blocks(&mut self, session_id: Uuid) {
         if let Some(session) = self.state.session_mut(session_id) {
-            for block in &mut session.transcript_blocks {
-                for activity in &mut block.activities {
-                    activity.complete = true;
-                }
-            }
+            complete_transcript_activities(session);
         }
     }
 
@@ -487,8 +479,14 @@ impl Waku {
                     .unwrap_or_else(|| ComposerSubmission::plain(message.clone()));
                 // The provider folded the message into the live turn. Append
                 // it to the same turn so the transcript mirrors the provider
-                // conversation (no new turn boundary).
+                // conversation (no new turn boundary). Landing behind whatever
+                // was still streaming closes that segment, so settle it first:
+                // a group collapsing behind the new message must read "Ran",
+                // not keep claiming aborted work is running for the rest of
+                // the turn, and the next delta opens a fresh part on this side
+                // of the boundary.
                 if let Some(session) = self.state.session_mut(session_id) {
+                    settle_stream_segment(session);
                     session.push_user_message_with_presentation(
                         message,
                         submission.display_content,
@@ -496,6 +494,7 @@ impl Waku {
                     );
                     session.updated_at = unix_time();
                 }
+                runtime.stream_phase = None;
             }
             DriverEvent::SteerRejected { message, reason } => {
                 let submission = runtime
@@ -904,6 +903,31 @@ pub(super) fn should_refresh_branch_after_activity(
             kind,
             crate::model::ActivityKind::Command | crate::model::ActivityKind::FileChange
         )
+}
+
+fn finish_streaming_messages(session: &mut AgentSession) {
+    for message in &mut session.messages {
+        if message.role == MessageRole::Assistant && message.streaming {
+            message.streaming = false;
+        }
+    }
+}
+
+fn complete_transcript_activities(session: &mut AgentSession) {
+    for block in &mut session.transcript_blocks {
+        for activity in &mut block.activities {
+            activity.complete = true;
+        }
+    }
+}
+
+/// Close the stream segment a mid-turn message boundary cuts off: open text
+/// stops streaming and in-flight thinking or tool work counts as finished.
+/// A provider that kept a call alive reconciles it — the next update for its
+/// source id writes `complete` again.
+pub(super) fn settle_stream_segment(session: &mut AgentSession) {
+    finish_streaming_messages(session);
+    complete_transcript_activities(session);
 }
 
 pub(super) fn push_transcript_activity(

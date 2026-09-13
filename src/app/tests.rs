@@ -8,15 +8,16 @@ use super::settings::visible_settings_pages;
 use super::{
     ESCAPE_STOP_CONFIRMATION_TIMEOUT, EscapeStopConfirmation, EscapeStopPress, EscapeStopTarget,
     NAVIGATION_RAIL_TICK_HEIGHT, NAVIGATION_RAIL_TURN_HEIGHT, PendingUserInput, SessionNavigation,
-    StreamDeltaKind, TranscriptRowKind::*, active_navigation_turn_index,
-    append_text_delta_to_session, assistant_response_footer, assistant_response_footer_index,
-    assistant_response_footer_time, compact_driver_error, disclosure_leading_space, fenced_code,
-    fitted_file_tree_width, fitted_panel_widths, folded_transcript_row_kinds,
-    format_worked_duration, format_working_elapsed, maintain_transcript_anchor, message_opens_turn,
-    message_starts_followup_turn, navigation_preview_snippet, navigation_rail_fade_visibility,
-    navigation_rail_height, navigation_rail_scale, paused_toast_duration, pop_stream_batch,
-    push_transcript_activity, response_footer_message_index, response_row_turn_id,
-    session_accepts_turn_output, session_is_reapable, should_refresh_branch_after_activity,
+    StreamDeltaKind, TranscriptRowKind::*, active_navigation_turn_index, activity_group_is_live,
+    activity_header_title, append_text_delta_to_session, assistant_response_footer,
+    assistant_response_footer_index, assistant_response_footer_time, compact_driver_error,
+    disclosure_leading_space, fenced_code, fitted_file_tree_width, fitted_panel_widths,
+    folded_transcript_row_kinds, format_worked_duration, format_working_elapsed,
+    maintain_transcript_anchor, message_opens_turn, message_starts_followup_turn,
+    navigation_preview_snippet, navigation_rail_fade_visibility, navigation_rail_height,
+    navigation_rail_scale, paused_toast_duration, pop_stream_batch, push_transcript_activity,
+    response_footer_message_index, response_row_turn_id, session_accepts_turn_output,
+    session_is_reapable, settle_stream_segment, should_refresh_branch_after_activity,
     should_show_navigation_rail, should_show_scroll_to_bottom, task_id_from_notification_tag,
     task_notification_tag, transcript_anchor_end_space, transcript_navigation_turns,
     transcript_rests_at_tail, transcript_row_kinds, transcript_row_splice,
@@ -770,6 +771,61 @@ fn only_the_turn_opening_prompt_is_a_rewind_boundary() {
     );
     assert!(!message_opens_turn(&session.messages, 3));
     assert!(message_opens_turn(&session.messages, 4));
+}
+
+/// A steer lands mid-turn behind whatever was still streaming, which drops
+/// that block out of the live tail. Its header then comes from the
+/// summary, so the aborted command and thinking have to read "Ran" — an
+/// unsettled `complete` flag would leave the collapsed group claiming the
+/// work still runs for the rest of the turn.
+#[test]
+fn an_accepted_steer_settles_the_stream_segment_its_message_cuts_off() {
+    let mut session = AgentSession::new(Uuid::new_v4(), ProviderKind::Codex);
+    session.begin_turn("Build it");
+    session.status = SessionStatus::Working;
+    push_transcript_activity(
+        &mut session,
+        ActivityItem::from_reasoning(
+            ReasoningBlock {
+                content: "Inspecting history".into(),
+                started_at_ms: 1_000,
+                finished_at_ms: 2_000,
+            },
+            false,
+        ),
+        false,
+    );
+    push_transcript_activity(
+        &mut session,
+        ActivityItem::new(None, ActivityKind::Command, "Run tests", None, false),
+        true,
+    );
+    session.push_message(MessageRole::Assistant, "Working on it");
+    session.messages.last_mut().unwrap().streaming = true;
+
+    assert_eq!(
+        activity_header_title(&session.transcript_blocks[0].activities, false, None),
+        "Running 1 thought · 1 command"
+    );
+
+    // `SteerAccepted` settles the segment, then appends the folded-in
+    // message to the running turn.
+    settle_stream_segment(&mut session);
+    session.push_user_message_with_presentation("actually, also this", None, Vec::new());
+
+    let block = &session.transcript_blocks[0];
+    assert!(block.activities.iter().all(|activity| activity.complete));
+    assert!(!session.messages[1].streaming);
+    assert!(!activity_group_is_live(
+        session.active_turn_id() == block.turn_id,
+        true,
+        block.after_message,
+        session.messages.len(),
+    ));
+    assert_eq!(
+        activity_header_title(&block.activities, false, None),
+        "Ran 1 thought · 1 command"
+    );
 }
 
 #[test]
