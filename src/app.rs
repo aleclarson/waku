@@ -67,6 +67,7 @@ use crate::ui::{
 };
 use crate::{
     CancelTaskSwitch, CancelTurn, CloseFind, CloseWindow, ConfirmTaskSwitch, CopySelection,
+    CopyWorkingDirectory,
     FindNext, FindPrevious, FocusComposer, NavigateBack, NavigateForward, NewProject, NewSession,
     OpenFind, OpenFindReplace, OpenResumePicker, OpenSettings, ReplaceAllMatches, SaveFile,
     SelectFirstTask, SelectLastTask, SwitchTaskBackward, SwitchTaskForward, ToggleCommandPalette,

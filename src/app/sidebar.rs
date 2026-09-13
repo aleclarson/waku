@@ -2008,6 +2008,7 @@ impl Waku {
                 &menu,
                 move |_| {
                     let rename_waku = waku.clone();
+                    let copy_waku = waku.clone();
                     let remove_waku = waku.clone();
                     vec![
                         MenuItem::new(tr!("common.rename"), move |window, cx| {
@@ -2015,6 +2016,14 @@ impl Waku {
                                 waku.begin_session_rename(session_id, window, cx);
                             });
                         }),
+                        MenuItem::new(
+                            tr!("session.copy_working_directory"),
+                            move |_, cx| {
+                                let _ = copy_waku.update(cx, |waku, cx| {
+                                    waku.copy_session_working_directory(session_id, cx);
+                                });
+                            },
+                        ),
                         MenuItem::Separator,
                         MenuItem::new(tr!("common.remove"), move |_, cx| {
                             let _ = remove_waku

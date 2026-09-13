@@ -237,6 +237,7 @@ common.remove: 削除
 common.rename: 名前を変更
 
 session.new_task: 新規タスク
+session.copy_working_directory: 作業ディレクトリをコピー
 
 sidebar.today: 今日
 sidebar.search: 検索

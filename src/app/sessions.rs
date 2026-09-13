@@ -757,6 +757,36 @@ impl Waku {
         cx.notify();
     }
 
+    /// The directory the session's agent runs in — its worktree once one is
+    /// materialized, the project checkout until then.
+    pub(super) fn copy_session_working_directory(&self, session_id: Uuid, cx: &mut App) {
+        let Some(session) = self
+            .state
+            .sessions
+            .iter()
+            .find(|session| session.id == session_id)
+        else {
+            return;
+        };
+        let Some(path) = self.workspace_path_for_session(session) else {
+            return;
+        };
+        cx.write_to_clipboard(ClipboardItem::new_string(
+            path.to_string_lossy().into_owned(),
+        ));
+    }
+
+    pub(super) fn copy_working_directory_action(
+        &mut self,
+        _: &CopyWorkingDirectory,
+        _: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(session_id) = self.state.selected_session {
+            self.copy_session_working_directory(session_id, cx);
+        }
+    }
+
     pub(super) fn cancel_turn_action(
         &mut self,
         _: &CancelTurn,
