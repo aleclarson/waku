@@ -154,6 +154,7 @@ impl Waku {
             return false;
         }
         if matches!(session.workspace, SessionWorkspace::NewWorktree { .. }) {
+            let project_id = session.project_id;
             let changed = self.selected_session_mut().is_some_and(|session| {
                 let SessionWorkspace::NewWorktree { base_branch } = &mut session.workspace else {
                     return false;
@@ -161,10 +162,16 @@ impl Waku {
                 if base_branch.as_deref() == Some(branch.as_str()) {
                     return false;
                 }
-                *base_branch = Some(branch);
+                *base_branch = Some(branch.clone());
                 true
             });
             if changed {
+                self.state.remember_workspace(
+                    project_id,
+                    &SessionWorkspace::NewWorktree {
+                        base_branch: Some(branch),
+                    },
+                );
                 self.save();
                 cx.notify();
             }

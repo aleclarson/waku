@@ -283,15 +283,30 @@ impl Waku {
     }
 
     pub(super) fn select_workspace(&mut self, workspace: SessionWorkspace, cx: &mut Context<Self>) {
-        let Some(session) = self.selected_session_mut() else {
+        let Some(session) = self.selected_session() else {
             return;
         };
-        if session.has_started() || session.is_busy() || session.workspace == workspace {
+        if session.has_started() || session.is_busy() {
             return;
         }
-        session.workspace = workspace;
+        let project_id = session.project_id;
+        // Reopening "New worktree" restores the base branch last used for
+        // this project; the branch selector is how it changes from there.
+        let workspace = match workspace {
+            SessionWorkspace::NewWorktree { base_branch: None } => SessionWorkspace::NewWorktree {
+                base_branch: self.state.remembered_base_branch(project_id),
+            },
+            workspace => workspace,
+        };
+        let changed = session.workspace != workspace;
+        self.state.remember_workspace(project_id, &workspace);
+        if changed && let Some(session) = self.selected_session_mut() {
+            session.workspace = workspace;
+        }
         self.save();
-        cx.notify();
+        if changed {
+            cx.notify();
+        }
     }
 
     pub(super) fn remove_session(&mut self, session_id: Uuid, cx: &mut Context<Self>) {

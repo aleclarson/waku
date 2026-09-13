@@ -20,7 +20,7 @@ use waku_protocol::i18n::AppLanguage;
 use waku_protocol::identity::DATA_DIRECTORY_NAME;
 use waku_protocol::model::{
     AgentSession, FavoriteModel, Project, ProviderKind, ProviderResumeCursor,
-    ProviderSessionHistory, ProviderSessionSummary, RuntimeMode,
+    ProviderSessionHistory, ProviderSessionSummary, RuntimeMode, SessionWorkspace,
 };
 use waku_protocol::theme::ThemePreference;
 
@@ -323,6 +323,10 @@ struct AppState {
     last_context_window: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     remembered_model_traits: Vec<RememberedModelTraits>,
+    /// The workspace mode last chosen for a draft in each project, applied
+    /// to that project's next fresh task.
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    project_workspaces: HashMap<Uuid, SessionWorkspace>,
     #[serde(default = "default_sidebar_visibility")]
     sidebar_visible: bool,
     #[serde(default = "default_right_panel_visibility")]
@@ -367,6 +371,11 @@ pub struct PersistedState {
     pub last_context_window: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub remembered_model_traits: Vec<RememberedModelTraits>,
+    /// The workspace mode last chosen for a draft in each project, applied
+    /// to that project's next fresh task. Only `Local` and `NewWorktree`
+    /// are stored; a materialized worktree is a result, not a choice.
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub project_workspaces: HashMap<Uuid, SessionWorkspace>,
     #[serde(default)]
     pub favorite_models: Vec<FavoriteModel>,
     #[serde(default)]
@@ -447,6 +456,7 @@ impl PersistedState {
             last_service_tier: None,
             last_context_window: None,
             remembered_model_traits: Vec::new(),
+            project_workspaces: HashMap::new(),
             favorite_models: Vec::new(),
             theme: ThemePreference::System,
             language: AppLanguage::default(),
@@ -495,7 +505,48 @@ impl PersistedState {
             session.service_tier.clone_from(&self.last_service_tier);
             session.context_window.clone_from(&self.last_context_window);
         }
+        session.workspace = self.workspace_for_new_session(project_id);
         session
+    }
+
+    /// Records the workspace mode chosen for a draft in `project_id`; the
+    /// project's next fresh task reopens with it. A materialized `Worktree`
+    /// is the result of a choice, not a choice, so it is never stored.
+    pub fn remember_workspace(&mut self, project_id: Uuid, workspace: &SessionWorkspace) {
+        match workspace {
+            SessionWorkspace::Local | SessionWorkspace::NewWorktree { .. } => {
+                self.project_workspaces.insert(project_id, workspace.clone());
+            }
+            SessionWorkspace::Worktree { .. } => {}
+        }
+    }
+
+    /// Base branch a planned worktree in `project_id` reopens with, when one
+    /// was picked before.
+    pub fn remembered_base_branch(&self, project_id: Uuid) -> Option<String> {
+        match self.project_workspaces.get(&project_id) {
+            Some(SessionWorkspace::NewWorktree { base_branch }) => base_branch.clone(),
+            _ => None,
+        }
+    }
+
+    /// The workspace mode a fresh draft for `project_id` opens with — the
+    /// last one chosen there. Projectless and unknown projects stay local:
+    /// they have no repository to fork a worktree from.
+    fn workspace_for_new_session(&self, project_id: Uuid) -> SessionWorkspace {
+        let has_repository = self
+            .projects
+            .iter()
+            .any(|project| project.id == project_id && !project.is_projectless());
+        if !has_repository {
+            return SessionWorkspace::Local;
+        }
+        match self.project_workspaces.get(&project_id) {
+            Some(workspace @ (SessionWorkspace::Local | SessionWorkspace::NewWorktree { .. })) => {
+                workspace.clone()
+            }
+            _ => SessionWorkspace::Local,
+        }
     }
 
     pub fn remember_model_traits(
@@ -595,6 +646,7 @@ impl PersistedState {
             last_service_tier: self.last_service_tier.clone(),
             last_context_window: self.last_context_window.clone(),
             remembered_model_traits: self.remembered_model_traits.clone(),
+            project_workspaces: self.project_workspaces.clone(),
             sidebar_visible: self.sidebar_visible,
             right_panel_visible: self.right_panel_visible,
             sidebar_width: self.sidebar_width,
@@ -629,6 +681,7 @@ impl PersistedState {
         self.last_service_tier = app_state.last_service_tier;
         self.last_context_window = app_state.last_context_window;
         self.remembered_model_traits = app_state.remembered_model_traits;
+        self.project_workspaces = app_state.project_workspaces;
         self.sidebar_visible = app_state.sidebar_visible;
         self.right_panel_visible = app_state.right_panel_visible;
         self.sidebar_width = app_state.sidebar_width;
@@ -1198,6 +1251,111 @@ mod tests {
 
         assert_eq!(session.runtime_mode, RuntimeMode::Ask);
         assert_eq!(state.app_state().last_runtime_mode, RuntimeMode::Ask);
+    }
+
+    #[test]
+    fn new_tasks_reopen_the_workspace_last_chosen_for_their_project() {
+        let mut state = PersistedState::fresh(PathBuf::from("/tmp/project"));
+        let project_id = state.projects[0].id;
+        let other = Project::from_path(PathBuf::from("/tmp/other"));
+        let other_id = other.id;
+        state.projects.push(other);
+
+        state.remember_workspace(
+            project_id,
+            &SessionWorkspace::NewWorktree {
+                base_branch: Some("develop".to_owned()),
+            },
+        );
+
+        let session = state.new_session(project_id, ProviderKind::Codex);
+        assert_eq!(
+            session.workspace,
+            SessionWorkspace::NewWorktree {
+                base_branch: Some("develop".to_owned())
+            }
+        );
+        assert_eq!(
+            state.remembered_base_branch(project_id),
+            Some("develop".to_owned())
+        );
+
+        // A project without a remembered choice keeps the default.
+        let session = state.new_session(other_id, ProviderKind::Codex);
+        assert_eq!(session.workspace, SessionWorkspace::Local);
+        assert_eq!(state.remembered_base_branch(other_id), None);
+    }
+
+    #[test]
+    fn switching_back_to_local_overwrites_the_remembered_worktree() {
+        let mut state = PersistedState::fresh(PathBuf::from("/tmp/project"));
+        let project_id = state.projects[0].id;
+
+        state.remember_workspace(
+            project_id,
+            &SessionWorkspace::NewWorktree { base_branch: None },
+        );
+        state.remember_workspace(project_id, &SessionWorkspace::Local);
+
+        let session = state.new_session(project_id, ProviderKind::Codex);
+        assert_eq!(session.workspace, SessionWorkspace::Local);
+        assert_eq!(state.remembered_base_branch(project_id), None);
+    }
+
+    #[test]
+    fn materialized_worktrees_and_projectless_projects_are_not_remembered() {
+        let mut state = PersistedState::fresh(PathBuf::from("/tmp/project"));
+        let project_id = state.projects[0].id;
+
+        // A materialized worktree is the result of a choice, not a choice.
+        state.remember_workspace(
+            project_id,
+            &SessionWorkspace::Worktree {
+                path: PathBuf::from("/tmp/worktree"),
+                branch: "feature".to_owned(),
+            },
+        );
+        let session = state.new_session(project_id, ProviderKind::Codex);
+        assert_eq!(session.workspace, SessionWorkspace::Local);
+
+        // A remembered worktree must not reach a projectless task: it has
+        // no repository to fork from.
+        let projectless_root =
+            waku_protocol::projectless::workspace_root().expect("workspace root is initialized");
+        let projectless = Project::from_path(projectless_root.join("2026-09-13/task"));
+        let projectless_id = projectless.id;
+        state.projects.push(projectless);
+        state.remember_workspace(
+            projectless_id,
+            &SessionWorkspace::NewWorktree { base_branch: None },
+        );
+        let session = state.new_session(projectless_id, ProviderKind::Codex);
+        assert_eq!(session.workspace, SessionWorkspace::Local);
+    }
+
+    #[test]
+    fn project_workspaces_survive_an_app_state_round_trip() {
+        let mut state = PersistedState::fresh(PathBuf::from("/tmp/project"));
+        let project_id = state.projects[0].id;
+        state.remember_workspace(
+            project_id,
+            &SessionWorkspace::NewWorktree {
+                base_branch: Some("main".to_owned()),
+            },
+        );
+
+        let app_state = serde_json::to_value(state.app_state()).unwrap();
+        let mut restored = PersistedState::empty();
+        restored.projects.clone_from(&state.projects);
+        restored.apply_app_state(serde_json::from_value(app_state).unwrap());
+
+        let session = restored.new_session(project_id, ProviderKind::Codex);
+        assert_eq!(
+            session.workspace,
+            SessionWorkspace::NewWorktree {
+                base_branch: Some("main".to_owned())
+            }
+        );
     }
 
     #[test]
