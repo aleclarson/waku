@@ -220,9 +220,9 @@ const SIDEBAR_PROJECT_RECENT_WINDOW_SECONDS: u64 = 3 * 24 * 60 * 60;
 const SIDEBAR_PROJECT_REVEAL_BATCH: usize = 30;
 
 /// The session row's trailing time: how long ago the agent last replied. A
-/// live turn carries no label — the trailing slot shows the worktree icon for
-/// a worktree task and stays empty for the primary checkout — and a session
-/// that has never replied shows nothing.
+/// live turn carries no label and a session that has never replied shows
+/// nothing. The worktree icon beside it is a persistent marker and does not
+/// wait for a live turn.
 pub(super) fn session_time_label(session: &AgentSession, now: u64) -> Option<String> {
     if session.status == SessionStatus::Background {
         return Some(tr!("sidebar.status_background"));
@@ -236,8 +236,8 @@ pub(super) fn session_time_label(session: &AgentSession, now: u64) -> Option<Str
 }
 
 /// A turn is live while the session is busy and its last turn is still
-/// running. The label and the worktree icon read this together so the two
-/// never disagree about which one the trailing slot shows.
+/// running. The trailing time label reads this so it stays quiet while the
+/// agent works.
 fn session_has_live_turn(session: &AgentSession) -> bool {
     session.is_busy()
         && session
@@ -1974,10 +1974,9 @@ impl Waku {
                             )
                     })
                     .when(!has_detail_label, |element| element.child(div().flex_1()))
-                    .when(
-                        session_has_live_turn(session) && session.workspace.is_worktree(),
-                        |element| element.child(icon("icons/fork.svg", 12.5, theme.text_tertiary)),
-                    )
+                    .when(session.workspace.is_worktree(), |element| {
+                        element.child(icon("icons/fork.svg", 12.5, theme.text_tertiary))
+                    })
                     .when_some(
                         session_time_label(session, unix_time()),
                         |element, label| {

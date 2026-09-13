@@ -115,9 +115,8 @@ export function sessionTimeLabel(
   nowSeconds = Math.floor(Date.now() / 1_000),
   t?: Translator,
 ): string | null {
-  // A live turn carries no label — the row's trailing slot shows the
-  // worktree icon for a worktree task and stays empty for the primary
-  // checkout.
+  // A live turn carries no label. The worktree icon beside it is a
+  // persistent marker and does not wait for a live turn.
   if (sessionHasLiveTurn(session)) return null
   if (session.last_reply_at == null) return null
   const elapsed = Math.max(0, nowSeconds - session.last_reply_at)
