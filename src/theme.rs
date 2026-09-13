@@ -83,6 +83,10 @@ pub struct Theme {
     pub inverse: Hsla,
     pub on_inverse: Hsla,
 
+    /// Informational blue for "settled, not yet seen" markers — the sidebar's
+    /// finished-turn dot. Kept apart from `accent` so an unread state never
+    /// reads as live work.
+    pub info: Hsla,
     pub warning: Hsla,
     pub success: Hsla,
     pub favorite: Hsla,
@@ -138,6 +142,7 @@ impl Theme {
             inverse: rgb(0xE7E9EC).into(),
             on_inverse: rgb(0x17181C).into(),
 
+            info: rgb(0x3B82F6).into(),
             warning: rgb(0xE0B36A).into(),
             success: rgb(0x62C987).into(),
             favorite: rgb(0xEAB308).into(),
@@ -185,6 +190,7 @@ impl Theme {
             inverse: rgb(0x202227).into(),
             on_inverse: rgb(0xF8F8F9).into(),
 
+            info: rgb(0x2563EB).into(),
             warning: rgb(0xA66B20).into(),
             success: rgb(0x2F8F52).into(),
             favorite: rgb(0xCA8A04).into(),

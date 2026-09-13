@@ -1933,7 +1933,27 @@ impl Waku {
                             12.0,
                             status_color(&theme, session.status),
                         ))
-                    }),
+                    })
+                    .when(
+                        session.status == SessionStatus::Idle
+                            && self.unseen_completions.contains(&session_id),
+                        |element| {
+                            element.child(
+                                div()
+                                    .flex_none()
+                                    .size(px(12.0))
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
+                                    .child(
+                                        div()
+                                            .size(px(7.0))
+                                            .rounded_full()
+                                            .bg(theme.info),
+                                    ),
+                            )
+                        },
+                    ),
             )
             .child(
                 div()
@@ -2415,7 +2435,7 @@ fn localized_session_title(session: &AgentSession) -> String {
     }
 }
 
-fn sidebar_session_selected(
+pub(super) fn sidebar_session_selected(
     selected_session: Option<Uuid>,
     pending_session: Option<Uuid>,
     session_id: Uuid,
