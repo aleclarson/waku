@@ -502,8 +502,6 @@ sidebar.this_year:
   en: This Year
 sidebar.more:
   en: More
-sidebar.working:
-  en: Working for %{elapsed}
 sidebar.just_now:
   en: just now
 sidebar.minutes_ago:

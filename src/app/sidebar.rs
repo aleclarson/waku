@@ -219,27 +219,31 @@ const SIDEBAR_GROUP_CHILD_PADDING: f32 = 28.0;
 const SIDEBAR_PROJECT_RECENT_WINDOW_SECONDS: u64 = 3 * 24 * 60 * 60;
 const SIDEBAR_PROJECT_REVEAL_BATCH: usize = 30;
 
-/// The session row's trailing time: how long the live turn has been working,
-/// or how long ago the agent last replied. A session that has never replied
-/// shows nothing.
+/// The session row's trailing time: how long ago the agent last replied. A
+/// live turn carries no label — the trailing slot shows the worktree icon for
+/// a worktree task and stays empty for the primary checkout — and a session
+/// that has never replied shows nothing.
 pub(super) fn session_time_label(session: &AgentSession, now: u64) -> Option<String> {
     if session.status == SessionStatus::Background {
         return Some(tr!("sidebar.status_background"));
     }
-    if session.is_busy()
-        && let Some(turn) = session
-            .turns
-            .last()
-            .filter(|turn| turn.status == TurnStatus::Running)
-    {
-        return Some(tr!(
-            "sidebar.working",
-            elapsed = format_working_elapsed(now.saturating_sub(turn.started_at))
-        ));
+    if session_has_live_turn(session) {
+        return None;
     }
     session
         .last_reply_at
         .map(|last_reply_at| format_time_ago(now.saturating_sub(last_reply_at)))
+}
+
+/// A turn is live while the session is busy and its last turn is still
+/// running. The label and the worktree icon read this together so the two
+/// never disagree about which one the trailing slot shows.
+fn session_has_live_turn(session: &AgentSession) -> bool {
+    session.is_busy()
+        && session
+            .turns
+            .last()
+            .is_some_and(|turn| turn.status == TurnStatus::Running)
 }
 
 /// Recency for sidebar ordering and date groups. A submitted turn promotes the
@@ -1975,6 +1979,10 @@ impl Waku {
                             )
                     })
                     .when(!has_detail_label, |element| element.child(div().flex_1()))
+                    .when(
+                        session_has_live_turn(session) && session.workspace.is_worktree(),
+                        |element| element.child(icon("icons/fork.svg", 12.5, theme.text_tertiary)),
+                    )
                     .when_some(
                         session_time_label(session, unix_time()),
                         |element, label| {

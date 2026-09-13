@@ -102,21 +102,23 @@ export function sessionHasStarted(session: AgentSession): boolean {
   )
 }
 
+export function sessionHasLiveTurn(session: AgentSession): boolean {
+  const turn = session.turns.at(-1)
+  return (
+    (session.status === 'connecting' || session.status === 'working' || session.status === 'waiting' || session.status === 'background')
+      && turn?.status === 'running'
+  )
+}
+
 export function sessionTimeLabel(
   session: AgentSession,
   nowSeconds = Math.floor(Date.now() / 1_000),
   t?: Translator,
 ): string | null {
-  const turn = session.turns.at(-1)
-  if (
-    (session.status === 'connecting' || session.status === 'working' || session.status === 'waiting' || session.status === 'background')
-      && turn?.status === 'running'
-  ) {
-    const elapsed = Math.max(0, nowSeconds - turn.started_at)
-    return t
-      ? t('sidebar.working', { elapsed: formatWorkingElapsedLocalized(elapsed, t) })
-      : `Working for ${formatWorkingElapsed(elapsed)}`
-  }
+  // A live turn carries no label — the row's trailing slot shows the
+  // worktree icon for a worktree task and stays empty for the primary
+  // checkout.
+  if (sessionHasLiveTurn(session)) return null
   if (session.last_reply_at == null) return null
   const elapsed = Math.max(0, nowSeconds - session.last_reply_at)
   return t ? formatTimeAgoLocalized(elapsed, t) : formatTimeAgo(elapsed)
@@ -128,13 +130,6 @@ export function nextSidebarUpdateDelay(
 ): number {
   let next = secondsUntilLocalMidnight(nowSeconds)
   for (const session of sessions) {
-    const turn = session.turns.at(-1)
-    if (
-      (session.status === 'connecting' || session.status === 'working' || session.status === 'waiting' || session.status === 'background')
-        && turn?.status === 'running'
-    ) {
-      return 1
-    }
     if (session.last_reply_at == null) continue
     const elapsed = Math.max(0, nowSeconds - session.last_reply_at)
     const step = elapsed < 3_600 ? 60 : elapsed < 86_400 ? 3_600 : 86_400
@@ -173,41 +168,11 @@ export function formatTimeAgo(seconds: number): string {
   return `${Math.floor(seconds / 86_400)}d`
 }
 
-export function formatWorkingElapsed(seconds: number): string {
-  if (seconds < 60) return `${seconds}s`
-  if (seconds < 3_600) {
-    const minutes = Math.floor(seconds / 60)
-    const remainder = seconds % 60
-    return remainder ? `${minutes}m ${remainder}s` : `${minutes}m`
-  }
-  const hours = Math.floor(seconds / 3_600)
-  const minutes = Math.floor((seconds % 3_600) / 60)
-  return minutes ? `${hours}h ${minutes}m` : `${hours}h`
-}
-
 function formatTimeAgoLocalized(seconds: number, t: Translator): string {
   if (seconds < 60) return t('sidebar.just_now')
   if (seconds < 3_600) return t('sidebar.minutes_ago', { count: Math.floor(seconds / 60) })
   if (seconds < 86_400) return t('sidebar.hours_ago', { count: Math.floor(seconds / 3_600) })
   return t('sidebar.days_ago', { count: Math.floor(seconds / 86_400) })
-}
-
-function formatWorkingElapsedLocalized(seconds: number, t: Translator): string {
-  if (seconds < 60) return t('duration.seconds_short', { count: seconds })
-  if (seconds < 3_600) {
-    const minutes = Math.floor(seconds / 60)
-    const remainder = seconds % 60
-    const first = t('duration.minutes_short', { count: minutes })
-    return remainder
-      ? t('duration.two_units', { first, second: t('duration.seconds_short', { count: remainder }) })
-      : first
-  }
-  const hours = Math.floor(seconds / 3_600)
-  const minutes = Math.floor((seconds % 3_600) / 60)
-  const first = t('duration.hours_short', { count: hours })
-  return minutes
-    ? t('duration.two_units', { first, second: t('duration.minutes_short', { count: minutes }) })
-    : first
 }
 
 type Translator = (key: string, params?: Record<string, string | number>) => string

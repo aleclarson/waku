@@ -1697,7 +1697,7 @@ fn worked_duration_uses_readable_units() {
 }
 
 #[test]
-fn sidebar_time_labels_prefer_the_live_turn_over_the_last_reply() {
+fn sidebar_time_labels_stay_quiet_during_the_live_turn() {
     use super::sidebar::{format_time_ago, session_time_label};
 
     assert_eq!(format_time_ago(0), "just now");
@@ -1710,15 +1710,13 @@ fn sidebar_time_labels_prefer_the_live_turn_over_the_last_reply() {
     let mut session = AgentSession::new(Uuid::new_v4(), ProviderKind::Codex);
     assert_eq!(session_time_label(&session, 1_000), None);
 
-    // A live turn counts up instead of showing the previous reply's age.
+    // A live turn shows no label — the trailing slot carries the worktree
+    // icon for a worktree task and stays empty for the primary checkout.
     session.last_reply_at = Some(40);
     session.begin_turn("go");
     session.status = SessionStatus::Working;
     session.turns[0].started_at = 100;
-    assert_eq!(
-        session_time_label(&session, 109).as_deref(),
-        Some("Working for 9s")
-    );
+    assert_eq!(session_time_label(&session, 109), None);
 
     // Settled again: back to how long ago the agent last replied.
     session.finish_active_turn(TurnStatus::Completed);

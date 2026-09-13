@@ -3,9 +3,9 @@ import type { AgentSession, Project } from '@waku/client'
 import {
   dateGroup,
   formatTimeAgo,
-  formatWorkingElapsed,
   groupSessions,
   nextSidebarUpdateDelay,
+  sessionHasLiveTurn,
   sessionHasStarted,
   sessionTimeLabel,
   sidebarRows,
@@ -36,8 +36,6 @@ describe('desktop sidebar presentation', () => {
   test('matches desktop settled and live time labels', () => {
     expect(formatTimeAgo(0)).toBe('just now')
     expect(formatTimeAgo(604_800)).toBe('7d')
-    expect(formatWorkingElapsed(65)).toBe('1m 5s')
-    expect(formatWorkingElapsed(3_720)).toBe('1h 2m')
 
     const live = session({
       status: 'working',
@@ -51,8 +49,10 @@ describe('desktop sidebar presentation', () => {
         checkpoint: null,
       }],
     })
-    expect(sessionTimeLabel(live, 165)).toBe('Working for 1m 5s')
-    expect(nextSidebarUpdateDelay([live], 165)).toBe(1)
+    expect(sessionHasLiveTurn(live)).toBe(true)
+    expect(sessionTimeLabel(live, 165)).toBeNull()
+    // A live turn shows no ticking label, so it adds no per-second wake.
+    expect(nextSidebarUpdateDelay([live], 165)).toBeGreaterThan(1)
   })
 
   test('does not invent a reply time and keeps cursor-only resumed tasks', () => {

@@ -242,7 +242,6 @@ sidebar.this_week: 本周
 sidebar.this_month: 本月
 sidebar.this_year: 今年
 sidebar.more: 更早
-sidebar.working: 工作中 · %{elapsed}
 sidebar.just_now: 刚刚
 sidebar.minutes_ago: "%{count} 分钟前"
 sidebar.hours_ago: "%{count} 小时前"

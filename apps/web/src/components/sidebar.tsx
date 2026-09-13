@@ -12,6 +12,7 @@ import { useI18n } from '@/lib/i18n'
 import {
   groupSessions,
   nextSidebarUpdateDelay,
+  sessionHasLiveTurn,
   sessionTimeLabel,
   sidebarRows,
   type DateGroup,
@@ -431,10 +432,15 @@ function SessionRow({
 
 function SessionMetadata({ item, nowSeconds, t }: { item: SessionItem; nowSeconds: number; t: Translator }) {
   const timeLabel = sessionTimeLabel(item.session, nowSeconds, t)
+  const workspace = item.session.workspace
+  const inWorktree = workspace?.kind === 'worktree' || workspace?.kind === 'newWorktree'
   return (
     <span className="flex w-full min-w-0 items-center gap-1.5 text-[11.5px] leading-[15px] text-[var(--text-tertiary)]">
       <WakuIcon className="size-[11px] shrink-0" name="folder" />
       <span className="min-w-0 flex-1 truncate">{item.projectName}</span>
+      {sessionHasLiveTurn(item.session) && inWorktree && (
+        <WakuIcon className="size-[11px] shrink-0 text-[var(--text-tertiary)]" name="fork" />
+      )}
       {timeLabel && (
         <span className={cn(
           'shrink-0 text-[var(--text-ghost)]',
