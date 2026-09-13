@@ -67,12 +67,12 @@ use crate::ui::{
 };
 use crate::{
     CancelTaskSwitch, CancelTurn, CloseFind, CloseWindow, ConfirmTaskSwitch, CopySelection,
-    CopyWorkingDirectory,
-    FindNext, FindPrevious, FocusComposer, NavigateBack, NavigateForward, NewProject, NewSession,
-    OpenFind, OpenFindReplace, OpenResumePicker, OpenSettings, ReplaceAllMatches, SaveFile,
-    SelectFirstTask, SelectLastTask, SwitchTaskBackward, SwitchTaskForward, ToggleCommandPalette,
-    ToggleFindCaseSensitive, ToggleFindRegex, ToggleFindWholeWord, ToggleFpsCounter,
-    ToggleModelPicker, ToggleRightPanel, ToggleSidebar, ToggleUsagePanel,
+    CopyWorkingDirectory, FindNext, FindPrevious, FocusComposer, FocusTerminal, NavigateBack,
+    NavigateForward, NewProject, NewSession, OpenFind, OpenFindReplace, OpenResumePicker,
+    OpenSettings, ReplaceAllMatches, SaveFile, SelectFirstTask, SelectLastTask, SwitchTaskBackward,
+    SwitchTaskForward, ToggleCommandPalette, ToggleFindCaseSensitive, ToggleFindRegex,
+    ToggleFindWholeWord, ToggleFpsCounter, ToggleModelPicker, ToggleRightPanel, ToggleSidebar,
+    ToggleUsagePanel,
 };
 
 #[cfg(target_os = "macos")]
@@ -729,6 +729,9 @@ struct RightPanelSessionState {
     visible: bool,
     surfaces: Vec<RightPanelSurface>,
     active_surface: Option<usize>,
+    /// Terminal that last held keyboard focus, so `FocusTerminal` can return
+    /// to it rather than whichever surface happens to be active.
+    last_focused_terminal: Option<Uuid>,
     tabs_scroll_handle: ScrollHandle,
     pending_tab_reveal: Option<usize>,
     expanded_paths: HashSet<PathBuf>,
@@ -747,6 +750,7 @@ impl RightPanelSessionState {
             visible,
             surfaces: Vec::new(),
             active_surface: None,
+            last_focused_terminal: None,
             tabs_scroll_handle: ScrollHandle::new(),
             pending_tab_reveal: None,
             expanded_paths: HashSet::new(),
@@ -1384,6 +1388,9 @@ pub struct Waku {
     file_preview_scrollbar: Rc<ScrollbarState>,
     right_panel_pending_tab_reveal: Option<usize>,
     right_panel_pending_terminal_focus: Option<Uuid>,
+    /// Terminal surface that most recently held focus. Swapped in and out with
+    /// the rest of the per-session panel state.
+    right_panel_last_focused_terminal: Option<Uuid>,
     right_panel_expanded_paths: HashSet<PathBuf>,
     right_panel_files_selected_path: Option<String>,
     right_panel_file_tree_width: f32,
@@ -2905,6 +2912,7 @@ impl Waku {
                 file_preview_scrollbar: ScrollbarState::new(),
                 right_panel_pending_tab_reveal: None,
                 right_panel_pending_terminal_focus: None,
+                right_panel_last_focused_terminal: None,
                 right_panel_expanded_paths: HashSet::new(),
                 right_panel_files_selected_path: None,
                 right_panel_file_tree_width: DEFAULT_FILE_TREE_WIDTH,

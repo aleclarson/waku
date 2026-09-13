@@ -1846,6 +1846,7 @@ impl Waku {
             visible: self.right_panel_visible,
             surfaces: std::mem::take(&mut self.right_panel_surfaces),
             active_surface: self.right_panel_active_surface.take(),
+            last_focused_terminal: self.right_panel_last_focused_terminal.take(),
             tabs_scroll_handle: std::mem::replace(
                 &mut self.right_panel_tabs_scroll_handle,
                 ScrollHandle::new(),
@@ -1866,6 +1867,7 @@ impl Waku {
         self.right_panel_visible = state.visible;
         self.right_panel_surfaces = state.surfaces;
         self.right_panel_active_surface = state.active_surface;
+        self.right_panel_last_focused_terminal = state.last_focused_terminal;
         self.right_panel_tabs_scroll_handle = state.tabs_scroll_handle;
         self.right_panel_pending_tab_reveal = state.pending_tab_reveal;
         self.right_panel_expanded_paths = state.expanded_paths;
@@ -1910,6 +1912,48 @@ impl Waku {
         self.right_panel_pending_browser_focus = self
             .active_right_panel_surface()
             .and_then(RightPanelSurface::browser_id);
+    }
+
+    /// `secondary-j`: put keyboard focus back in this session's terminal —
+    /// the one that last had it, the most recently opened one otherwise, or a
+    /// fresh surface when the session has no terminal yet. The panel opens if
+    /// it was hidden; without a selected session there is no working
+    /// directory to spawn into, so the chord does nothing.
+    pub(super) fn focus_terminal_action(
+        &mut self,
+        _: &FocusTerminal,
+        _: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.settings_page = None;
+        if self.state.selected_session.is_none() {
+            cx.notify();
+            return;
+        }
+        let target = self
+            .right_panel_last_focused_terminal
+            .and_then(|terminal_id| {
+                self.right_panel_surfaces
+                    .iter()
+                    .position(|surface| surface.terminal_id() == Some(terminal_id))
+            })
+            .or_else(|| {
+                self.right_panel_surfaces
+                    .iter()
+                    .rposition(|surface| surface.terminal_id().is_some())
+            });
+        if let Some(index) = target {
+            if let Some(terminal_id) = self.right_panel_surfaces[index].terminal_id() {
+                self.ensure_right_panel_terminal(terminal_id, cx);
+            }
+            self.right_panel_active_surface = Some(index);
+            self.reveal_right_panel_tab(index);
+            self.request_active_terminal_focus();
+            self.set_right_panel_visible(true, cx);
+        } else {
+            self.open_right_panel_surface(RightPanelSurface::new_terminal(), cx);
+        }
+        cx.notify();
     }
 
     /// The file the active editor surface is showing, whether via a File tab
@@ -2161,6 +2205,16 @@ impl Waku {
             let focus_handle = terminal.read(cx).focus_handle(cx);
             window.focus(&focus_handle, cx);
             self.right_panel_pending_terminal_focus = None;
+        }
+        // Record whichever terminal actually holds focus — pending requests
+        // land here, and so do direct clicks into the grid on a later frame.
+        if let Some(terminal_id) = active_terminal_id
+            && self
+                .right_panel_terminals
+                .get(&terminal_id)
+                .is_some_and(|terminal| terminal.read(cx).focus_handle(cx).is_focused(window))
+        {
+            self.right_panel_last_focused_terminal = Some(terminal_id);
         }
         let body = match self.active_right_panel_surface().cloned() {
             None => self.render_right_panel_chooser(cx).into_any_element(),

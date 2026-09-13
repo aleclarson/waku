@@ -38,6 +38,8 @@ menu.toggle_right_panel:
   en: Toggle Right Panel
 menu.focus_composer:
   en: Focus Composer
+menu.focus_terminal:
+  en: Focus Terminal
 menu.toggle_model_picker:
   en: Toggle Model Picker
 menu.toggle_usage_panel:
