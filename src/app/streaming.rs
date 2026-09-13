@@ -709,6 +709,13 @@ impl Waku {
                 if let Some(previous_kinds) = previous_kinds.as_deref() {
                     self.splice_active_transcript_rows_after_visibility_change(previous_kinds);
                 }
+                // The selected session's finish is already on screen; only a
+                // turn settling out of view gets the sound.
+                if self.state.completion_sound_enabled
+                    && self.state.selected_session != Some(session_id)
+                {
+                    crate::platform::play_completion_sound(self.state.completion_sound);
+                }
                 if let Some(Some((title, body))) = task_notification {
                     crate::platform::show_task_notification(
                         &task_notification_tag(session_id),

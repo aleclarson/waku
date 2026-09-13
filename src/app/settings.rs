@@ -550,6 +550,107 @@ impl Waku {
                         },
                     )),
             )
+            .child({
+                let enabled = self.state.completion_sound_enabled;
+                let selected_sound = self.state.completion_sound;
+                let weak = cx.entity().downgrade();
+                let sound_handle = self.menu_handle("completion-sound-selector", cx);
+                let sound_selector = dropdown_menu(
+                    MenuChip::new("completion-sound-selector")
+                        .label(selected_sound.label())
+                        .outlined()
+                        .selected(sound_handle.is_open())
+                        .w(px(116.0))
+                        .justify_between(),
+                    "completion-sound-selector-menu",
+                    &sound_handle,
+                    MenuAlign::BelowRight,
+                    move |_| {
+                        CompletionSound::ALL
+                            .into_iter()
+                            .map(|sound| {
+                                let weak = weak.clone();
+                                MenuItem::new(sound.label(), move |_, cx| {
+                                    let _ = weak.update(cx, |this, cx| {
+                                        this.set_completion_sound(sound, cx);
+                                    });
+                                })
+                                .selected(sound == selected_sound)
+                            })
+                            .collect()
+                    },
+                );
+                div()
+                    .mt(px(15.0))
+                    .w_full()
+                    .rounded(px(13.0))
+                    .bg(theme.raised)
+                    .flex()
+                    .flex_col()
+                    .child(
+                        div()
+                            .w_full()
+                            .min_h(px(60.0))
+                            .px(px(20.0))
+                            .py(px(12.0))
+                            .flex()
+                            .items_center()
+                            .gap(px(24.0))
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .min_w_0()
+                                    .child(
+                                        div()
+                                            .text_size(sp(13.5))
+                                            .font_weight(FontWeight::MEDIUM)
+                                            .text_color(theme.text)
+                                            .child(tr!("settings.completion_sound")),
+                                    )
+                                    .child(
+                                        div()
+                                            .mt(px(5.0))
+                                            .text_size(sp(12.5))
+                                            .line_height(sp(18.0))
+                                            .text_color(theme.text_secondary)
+                                            .child(tr!("settings.completion_sound_description")),
+                                    ),
+                            )
+                            .child(toggle_switch(
+                                "completion-sound-toggle",
+                                enabled,
+                                false,
+                                theme,
+                                cx,
+                                move |this, _, cx| {
+                                    this.set_completion_sound_enabled(!enabled, cx)
+                                },
+                            )),
+                    )
+                    .when(enabled, |card| {
+                        card.child(div().mx(px(20.0)).h(px(1.0)).bg(theme.border))
+                            .child(
+                                div()
+                                    .w_full()
+                                    .min_h(px(52.0))
+                                    .px(px(20.0))
+                                    .py(px(10.0))
+                                    .flex()
+                                    .items_center()
+                                    .gap(px(24.0))
+                                    .child(
+                                        div()
+                                            .flex_1()
+                                            .min_w_0()
+                                            .text_size(sp(13.5))
+                                            .font_weight(FontWeight::MEDIUM)
+                                            .text_color(theme.text)
+                                            .child(tr!("settings.completion_sound_name")),
+                                    )
+                                    .child(sound_selector),
+                            )
+                    })
+            })
             .when(updater_available, |column| {
                 let enabled = self.automatic_updates_enabled;
                 let toggle = toggle_switch(
@@ -602,6 +703,25 @@ impl Waku {
         self.state.analytics_enabled = enabled;
         self.analytics.set_enabled(enabled);
         self.save();
+        cx.notify();
+    }
+
+    fn set_completion_sound_enabled(&mut self, enabled: bool, cx: &mut Context<Self>) {
+        if self.state.completion_sound_enabled == enabled {
+            return;
+        }
+        self.state.completion_sound_enabled = enabled;
+        self.save();
+        cx.notify();
+    }
+
+    fn set_completion_sound(&mut self, sound: CompletionSound, cx: &mut Context<Self>) {
+        if self.state.completion_sound != sound {
+            self.state.completion_sound = sound;
+            self.save();
+        }
+        // Picking from the menu previews the sound.
+        crate::platform::play_completion_sound(sound);
         cx.notify();
     }
 

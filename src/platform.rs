@@ -201,6 +201,50 @@ pub fn show_task_notification(tag: &str, title: &str, body: &str, cx: &gpui::App
 }
 
 #[cfg(target_os = "macos")]
+thread_local! {
+    /// `NSSound` stops when deallocated, so the playing instance is retained
+    /// until the next play replaces it. Playback outlives this only by the
+    /// sound's own sub-second length.
+    static PLAYING_COMPLETION_SOUND:
+        std::cell::RefCell<Option<objc2::rc::Retained<objc2_app_kit::NSSound>>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// The bundled sounds' embedded MP3 payloads.
+#[cfg(target_os = "macos")]
+fn completion_sound_data(sound: waku_client::persistence::CompletionSound) -> &'static [u8] {
+    use waku_client::persistence::CompletionSound;
+
+    match sound {
+        CompletionSound::Bleep => include_bytes!("../assets/sounds/bleep.mp3").as_slice(),
+        CompletionSound::Gentle => include_bytes!("../assets/sounds/gentle.mp3").as_slice(),
+        CompletionSound::Bubble => include_bytes!("../assets/sounds/bubble.mp3").as_slice(),
+        CompletionSound::Chime => include_bytes!("../assets/sounds/chime.mp3").as_slice(),
+    }
+}
+
+/// Play one of the bundled turn-completion sounds. `NSSound` decodes the
+/// embedded MP3 itself and `play` returns immediately; there is no smaller
+/// portable API, so other platforms stay silent for now.
+#[cfg(target_os = "macos")]
+pub fn play_completion_sound(sound: waku_client::persistence::CompletionSound) {
+    use objc2::AnyThread;
+    use objc2_app_kit::NSSound;
+    use objc2_foundation::NSData;
+
+    let data = NSData::with_bytes(completion_sound_data(sound));
+    let Some(sound) = NSSound::initWithData(NSSound::alloc(), &data) else {
+        return;
+    };
+    if sound.play() {
+        PLAYING_COMPLETION_SOUND.with_borrow_mut(|slot| *slot = Some(sound));
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn play_completion_sound(_: waku_client::persistence::CompletionSound) {}
+
+#[cfg(target_os = "macos")]
 fn app_icon_for_application_path(
     application_path: &objc2_foundation::NSString,
 ) -> Option<std::sync::Arc<gpui::Image>> {
@@ -676,7 +720,7 @@ mod tests {
 mod macos_tests {
     use std::{borrow::Cow, path::Path};
 
-    use super::termy_open_url;
+    use super::{completion_sound_data, termy_open_url};
 
     #[test]
     fn termy_projects_use_the_new_tab_deeplink() {
@@ -689,5 +733,20 @@ mod macos_tests {
             url.query_pairs().collect::<Vec<_>>(),
             vec![(Cow::Borrowed("dir"), Cow::Borrowed("/tmp/project +%"))]
         );
+    }
+
+    #[test]
+    fn every_bundled_completion_sound_decodes() {
+        use objc2::AnyThread;
+        use objc2_app_kit::NSSound;
+        use objc2_foundation::NSData;
+        use waku_client::persistence::CompletionSound;
+
+        for variant in CompletionSound::ALL {
+            let data = NSData::with_bytes(completion_sound_data(variant));
+            let sound = NSSound::initWithData(NSSound::alloc(), &data)
+                .unwrap_or_else(|| panic!("{} should decode", variant.label()));
+            assert!(sound.duration() > 0.0, "{}", variant.label());
+        }
     }
 }

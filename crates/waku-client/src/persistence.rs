@@ -53,6 +53,32 @@ pub enum SidebarOrdering {
     Oldest,
 }
 
+/// One of the bundled sounds the desktop can play when a task the user is
+/// not looking at finishes its turn.
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CompletionSound {
+    Bleep,
+    #[default]
+    Gentle,
+    Bubble,
+    Chime,
+}
+
+impl CompletionSound {
+    pub const ALL: [Self; 4] = [Self::Bleep, Self::Gentle, Self::Bubble, Self::Chime];
+
+    /// Sound names are product names and stay untranslated.
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Bleep => "Bleep",
+            Self::Gentle => "Gentle",
+            Self::Bubble => "Bubble",
+            Self::Chime => "Chime",
+        }
+    }
+}
+
 fn default_sidebar_visibility() -> bool {
     true
 }
@@ -269,6 +295,10 @@ pub struct AppSettings {
     /// catalog id. `None` — and an id no longer installed — fall back to the
     /// platform file manager.
     pub open_in_app: Option<String>,
+    /// Play `completion_sound` when a session that is not selected finishes
+    /// its turn.
+    pub completion_sound_enabled: bool,
+    pub completion_sound: CompletionSound,
 }
 
 impl Default for AppSettings {
@@ -284,6 +314,8 @@ impl Default for AppSettings {
             sidebar_transparency: true,
             daemon_exposure: DaemonExposureSettings::default(),
             open_in_app: None,
+            completion_sound_enabled: false,
+            completion_sound: CompletionSound::default(),
         }
     }
 }
@@ -404,6 +436,10 @@ pub struct PersistedState {
     pub daemon_exposure: DaemonExposureSettings,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub open_in_app: Option<String>,
+    #[serde(default)]
+    pub completion_sound_enabled: bool,
+    #[serde(default)]
+    pub completion_sound: CompletionSound,
     #[serde(default = "default_sidebar_visibility")]
     pub sidebar_visible: bool,
     #[serde(default = "default_right_panel_visibility")]
@@ -478,6 +514,8 @@ impl PersistedState {
             sidebar_transparency: true,
             daemon_exposure: DaemonExposureSettings::default(),
             open_in_app: None,
+            completion_sound_enabled: false,
+            completion_sound: CompletionSound::default(),
             sidebar_visible: true,
             right_panel_visible: false,
             sidebar_width: DEFAULT_SIDEBAR_WIDTH,
@@ -645,6 +683,8 @@ impl PersistedState {
             sidebar_transparency: self.sidebar_transparency,
             daemon_exposure: self.daemon_exposure.clone(),
             open_in_app: self.open_in_app.clone(),
+            completion_sound_enabled: self.completion_sound_enabled,
+            completion_sound: self.completion_sound,
         }
     }
 
@@ -684,6 +724,8 @@ impl PersistedState {
         self.sidebar_transparency = settings.sidebar_transparency;
         self.daemon_exposure = settings.daemon_exposure;
         self.open_in_app = settings.open_in_app;
+        self.completion_sound_enabled = settings.completion_sound_enabled;
+        self.completion_sound = settings.completion_sound;
     }
 
     fn apply_app_state(&mut self, app_state: AppState) {

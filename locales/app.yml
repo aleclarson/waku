@@ -167,7 +167,7 @@ settings.daemon:
 settings.computer_use:
   en: Computer Use
 settings.general_keywords:
-  en: general local projects conversations privacy analytics telemetry anonymous sharing updates automatic sparkle version math latex formula expression
+  en: general local projects conversations privacy analytics telemetry anonymous sharing updates automatic sparkle version math latex formula expression sound audio notification alert chime bleep bubble gentle completed turn
 settings.appearance_keywords:
   en: appearance theme system light dark language english chinese simplified font size text editor sidebar transparency vibrancy blur opaque solid
 settings.providers_keywords:
@@ -344,6 +344,12 @@ settings.render_math:
   en: Render math expressions
 settings.render_math_description:
   en: Show formatted math in Markdown. Turn off to show LaTeX source.
+settings.completion_sound:
+  en: Play sound on completed turn
+settings.completion_sound_description:
+  en: Play a sound when a task you're not viewing finishes its turn
+settings.completion_sound_name:
+  en: Sound
 settings.theme_system:
   en: System
 settings.theme_light:
