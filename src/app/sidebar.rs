@@ -491,6 +491,63 @@ impl Waku {
             }))
     }
 
+    /// Mouse twin of GoToLatestUnseenCompletion (ctrl-backtick): live only
+    /// while an off-screen task has an unseen finished turn, then carries the
+    /// same informational-blue dot the sidebar draws in that row's status slot.
+    fn render_unseen_completion_bell(&self, cx: &mut Context<Self>) -> Stateful<Div> {
+        let theme = Theme::current(cx);
+        let enabled = sessions::latest_unseen_completion(
+            &self.unseen_completions,
+            self.state.selected_session,
+            self.pending_session_activation
+                .map(|pending| pending.session_id),
+        )
+        .is_some();
+        div()
+            .id("unseen-completion-bell")
+            .w(px(26.0))
+            .h(px(26.0))
+            .flex_none()
+            .relative()
+            .rounded(px(6.0))
+            .flex()
+            .items_center()
+            .justify_center()
+            .cursor_default()
+            .tooltip(Tooltip::text(tr!(
+                "command_palette.go_to_latest_unseen_completion"
+            )))
+            .when(!enabled, |element| element.opacity(0.35))
+            .when(enabled, |element| {
+                element
+                    .hover(|element| element.bg(theme.overlay))
+                    .active(|element| element.bg(theme.overlay_strong))
+                    .on_mouse_down(MouseButton::Left, |_, _, cx| {
+                        cx.stop_propagation();
+                    })
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        cx.stop_propagation();
+                        this.go_to_latest_unseen_completion_action(
+                            &GoToLatestUnseenCompletion,
+                            window,
+                            cx,
+                        );
+                    }))
+            })
+            .child(icon("icons/bell.svg", 14.0, theme.text_tertiary))
+            .when(enabled, |element| {
+                element.child(
+                    div()
+                        .absolute()
+                        .top(px(3.0))
+                        .right(px(3.0))
+                        .size(px(6.0))
+                        .rounded_full()
+                        .bg(theme.info),
+                )
+            })
+    }
+
     pub(super) fn render_history_button(
         &self,
         id: &'static str,
@@ -553,6 +610,7 @@ impl Waku {
                 ),
             )
             .child(self.render_sidebar_toggle(cx))
+            .child(self.render_unseen_completion_bell(cx).ml(px(6.0)))
             .child(
                 div()
                     .ml(px(6.0))
@@ -2161,6 +2219,7 @@ impl Waku {
                             .items_center()
                             .gap(px(6.0))
                             .child(self.render_sidebar_toggle(cx))
+                            .child(self.render_unseen_completion_bell(cx))
                             .child(
                                 div()
                                     .flex()

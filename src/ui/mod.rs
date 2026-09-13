@@ -564,6 +564,7 @@ mod tests {
             "icons/globe.svg",
             "icons/hourglass.svg",
             "icons/alert.svg",
+            "icons/bell.svg",
             "icons/lock.svg",
             "icons/lock-open.svg",
             "icons/star.svg",
