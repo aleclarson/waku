@@ -2985,13 +2985,15 @@ impl ComposerInput {
         let _subscriptions = vec![
             cx.subscribe(&input, |composer, _, event: &InputEvent, cx| match event {
                 InputEvent::Submit(raw) => {
-                    // The prompt is consumed by sending it, and whitespace
-                    // alone is nothing to send.
+                    // Whether Enter has something to send — text, staged
+                    // attachments, transcript annotations — is the owner's
+                    // call; the field just reports the keystroke and clears
+                    // only a real draft.
                     let value = raw.trim().to_owned();
                     if !value.is_empty() {
                         composer.input.update(cx, |input, cx| input.clear(cx));
-                        cx.emit(ComposerEvent::Submit(value));
                     }
+                    cx.emit(ComposerEvent::Submit(value));
                 }
                 InputEvent::Focus => cx.emit(ComposerEvent::Focus),
                 InputEvent::Edited => cx.emit(ComposerEvent::Edited),
@@ -3183,6 +3185,25 @@ mod tests {
         cx.update(|window, cx| window.focus(&composer.read(cx).focus(), cx));
         cx.run_until_parked();
         (composer, cx)
+    }
+
+    #[gpui::test]
+    fn enter_reports_an_empty_composer(cx: &mut TestAppContext) {
+        let (composer, cx) = setup_composer(cx);
+        let events: Rc<RefCell<Vec<ComposerEvent>>> = Rc::default();
+        let sink = events.clone();
+        cx.update(|_, cx| {
+            cx.subscribe(&composer, move |_, event: &ComposerEvent, _| {
+                sink.borrow_mut().push(event.clone());
+            })
+            .detach();
+        });
+
+        cx.simulate_keystrokes("enter");
+        assert!(matches!(
+            events.borrow().last(),
+            Some(ComposerEvent::Submit(text)) if text.is_empty()
+        ));
     }
 
     #[gpui::test]

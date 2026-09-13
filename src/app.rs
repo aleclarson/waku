@@ -2474,11 +2474,18 @@ impl Waku {
                         }
                     }
                     ComposerEvent::SteerQueued => {
-                        // Staged attachments make this a real draft even when
-                        // the text field is empty. Preserve the shortcut's
-                        // previous no-op behavior until that draft is sent or
-                        // cleared.
-                        if this.composer_attachments.is_empty() {
+                        // Staged attachments and transcript annotations make
+                        // this a real draft even when the text field is
+                        // empty. Preserve the shortcut's previous no-op
+                        // behavior until that draft is sent or cleared.
+                        if this.composer_attachments.is_empty()
+                            && this
+                                .transcript_selection
+                                .annotations
+                                .borrow()
+                                .items
+                                .is_empty()
+                        {
                             this.steer_oldest_queued_message(cx);
                         }
                     }
