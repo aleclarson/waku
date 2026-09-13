@@ -76,7 +76,7 @@ use crate::{
     SelectLastProject, SelectLastTask, SwitchProjectBackward, SwitchProjectForward,
     SwitchTaskBackward, SwitchTaskForward, ToggleCommandPalette, ToggleFindCaseSensitive,
     ToggleFindRegex, ToggleFindWholeWord, ToggleFpsCounter, ToggleModelPicker,
-    ToggleRightPanel, ToggleSidebar, ToggleUsagePanel,
+    ToggleRightPanel, ToggleSessionPin, ToggleSidebar, ToggleUsagePanel,
 };
 
 #[cfg(target_os = "macos")]

@@ -44,6 +44,8 @@ export const sessions = sqliteTable(
     lastReplyAt: integer("last_reply_at"),
     /** When the session was archived, unix seconds; NULL while active. */
     archivedAt: integer("archived_at"),
+    /** When the session was pinned to the sidebar top, unix seconds. */
+    pinnedAt: integer("pinned_at"),
   },
   (table) => [
     index("sessions_by_project").on(table.projectId, table.updatedAt),

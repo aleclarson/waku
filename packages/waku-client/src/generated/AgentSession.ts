@@ -54,7 +54,12 @@ last_reply_at?: number | null,
  * and are purged entirely once the archive outlives its retention
  * window.
  */
-archived_at?: number | null, provider_cursor: ProviderResumeCursor | null,
+archived_at?: number | null,
+/**
+ * When the session was pinned to the top of the sidebar, unix seconds.
+ * `None` while the session sits in its ordinary group.
+ */
+pinned_at?: number | null, provider_cursor: ProviderResumeCursor | null,
 /**
  * Slash commands the provider reported for this session's live process,
  * kept so a resumed session still completes them before its next

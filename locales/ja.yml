@@ -255,6 +255,8 @@ common.rename: 名前を変更
 session.new_task: 新規タスク
 session.copy_working_directory: 作業ディレクトリをコピー
 session.archive: アーカイブ
+session.pin: ピン留め
+session.unpin: ピン留めを解除
 
 sidebar.today: 今日
 sidebar.search: 検索
@@ -266,6 +268,7 @@ sidebar.ordering: 並び順
 sidebar.ordering_newest: 新しい順
 sidebar.ordering_oldest: 古い順
 sidebar.show_more: もっと見る
+sidebar.pinned: ピン留め
 sidebar.yesterday: 昨日
 sidebar.this_week: 今週
 sidebar.this_month: 今月

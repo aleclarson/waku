@@ -324,6 +324,7 @@ impl Render for Waku {
             .on_action(cx.listener(Self::save_right_panel_file_action))
             .on_action(cx.listener(Self::cancel_turn_action))
             .on_action(cx.listener(Self::archive_session_action))
+            .on_action(cx.listener(Self::toggle_session_pin_action))
             .on_action(cx.listener(Self::copy_selection_action))
             .on_action(cx.listener(Self::copy_working_directory_action))
             .on_action(cx.listener(Self::open_find_action))

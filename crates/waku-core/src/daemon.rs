@@ -984,6 +984,7 @@ fn merge_stale_session_metadata(existing: &mut AgentSession, incoming: AgentSess
         existing.updated_at = incoming.updated_at;
         existing.last_reply_at = incoming.last_reply_at.or(existing.last_reply_at);
         existing.archived_at = incoming.archived_at;
+        existing.pinned_at = incoming.pinned_at;
     }
     for queued in incoming.queued_messages {
         if !existing

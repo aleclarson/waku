@@ -503,6 +503,10 @@ session.copy_working_directory:
   en: Copy Working Directory
 session.archive:
   en: Archive
+session.pin:
+  en: Pin
+session.unpin:
+  en: Unpin
 
 sidebar.today:
   en: Today
@@ -524,6 +528,8 @@ sidebar.ordering_oldest:
   en: Oldest first
 sidebar.show_more:
   en: Show more
+sidebar.pinned:
+  en: Pinned
 sidebar.yesterday:
   en: Yesterday
 sidebar.this_week:

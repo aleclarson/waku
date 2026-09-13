@@ -66,6 +66,8 @@ impl SessionDateGroup {
 /// between Project and Updated grouping.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub(super) enum SidebarGroup {
+    /// Pinned tasks, always the first section regardless of grouping.
+    Pinned,
     Updated(SessionDateGroup),
     Project(Uuid),
     Projectless,
@@ -74,6 +76,7 @@ pub(super) enum SidebarGroup {
 impl SidebarGroup {
     fn element_key(self) -> SharedString {
         match self {
+            Self::Pinned => "pinned".into(),
             Self::Updated(group) => format!("updated-{}", group.index()).into(),
             Self::Project(project_id) => format!("project-{project_id}").into(),
             Self::Projectless => "projectless".into(),
@@ -82,6 +85,7 @@ impl SidebarGroup {
 
     fn mix_fingerprint(self, fingerprint: u64) -> u64 {
         match self {
+            Self::Pinned => mix(fingerprint, 0x300),
             Self::Updated(group) => mix(fingerprint, group.index() as u64 + 1),
             Self::Project(project_id) => mix_uuid(mix(fingerprint, 0x100), project_id),
             Self::Projectless => mix(fingerprint, 0x200),
@@ -1227,6 +1231,7 @@ impl Waku {
             fingerprint = mix_uuid(fingerprint, session.id);
             fingerprint = mix_uuid(fingerprint, session.project_id);
             fingerprint = mix(fingerprint, sidebar_session_timestamp(session));
+            fingerprint = mix(fingerprint, u64::from(session.pinned_at.is_some()));
             if self.state.sidebar_grouping == SidebarGrouping::Project {
                 fingerprint = mix(
                     fingerprint,
@@ -1283,6 +1288,27 @@ impl Waku {
         sort_sidebar_sessions(&mut sorted_sessions, self.state.sidebar_ordering);
 
         let mut rows = vec![SidebarRow::Search];
+
+        // Pinned tasks lead the sidebar in both groupings, ordered by the same
+        // recency the row displays — newest first, independent of the ordering
+        // preference applied to the ordinary groups below.
+        let mut pinned = sorted_sessions
+            .iter()
+            .filter(|session| session.pinned_at.is_some())
+            .copied()
+            .collect::<Vec<_>>();
+        pinned.sort_by_key(|session| std::cmp::Reverse(sidebar_session_timestamp(session)));
+        let pinned_ids = pinned.iter().map(|session| session.id).collect::<Vec<_>>();
+        append_sidebar_group_rows(
+            &mut rows,
+            SidebarGroup::Pinned,
+            &pinned_ids,
+            self.sidebar_collapsed_groups
+                .contains(&SidebarGroup::Pinned),
+            false,
+        );
+        sorted_sessions.retain(|session| session.pinned_at.is_none());
+
         match self.state.sidebar_grouping {
             SidebarGrouping::Updated => {
                 let mut grouped_sessions: [Vec<Uuid>; 6] = std::array::from_fn(|_| Vec::new());
@@ -1458,6 +1484,7 @@ impl Waku {
             _ => "icons/folder-open.svg",
         };
         let label = match group {
+            SidebarGroup::Pinned => tr!("sidebar.pinned"),
             SidebarGroup::Updated(group) => group.label(),
             SidebarGroup::Project(project_id) => self
                 .state
@@ -1468,7 +1495,7 @@ impl Waku {
                 .unwrap_or_else(|| tr!("project.no_project_name")),
             SidebarGroup::Projectless => tr!("project.chat"),
         };
-        let updated_chevron = matches!(group, SidebarGroup::Updated(_)).then(|| {
+        let updated_chevron = matches!(group, SidebarGroup::Updated(_) | SidebarGroup::Pinned).then(|| {
             icon("icons/chevron-down.svg", 14.0, theme.text_secondary)
                 .when(collapsed, |icon| {
                     icon.with_transformation(gpui::Transformation::rotate(gpui::percentage(0.75)))
@@ -1623,7 +1650,7 @@ impl Waku {
         match group {
             SidebarGroup::Project(project_id) => self.select_project(project_id, cx),
             SidebarGroup::Projectless => self.create_projectless_session(cx),
-            SidebarGroup::Updated(_) => return,
+            SidebarGroup::Pinned | SidebarGroup::Updated(_) => return,
         }
         let focus = self.composer_focus(cx);
         window.focus(&focus, cx);
@@ -1853,7 +1880,11 @@ impl Waku {
             .projects
             .iter()
             .find(|project| project.id == session.project_id);
-        let grouped_by_project = self.state.sidebar_grouping == SidebarGrouping::Project;
+        let pinned = session.pinned_at.is_some();
+        // The Pinned group mixes projects, so its rows keep the flat layout
+        // and project-name detail even while Project grouping is active.
+        let grouped_by_project =
+            self.state.sidebar_grouping == SidebarGrouping::Project && !pinned;
         let left_padding = if grouped_by_project {
             SIDEBAR_GROUP_CHILD_PADDING
         } else {
@@ -2043,6 +2074,17 @@ impl Waku {
                             },
                         ))
                     })
+                    .when(pinned, |element| {
+                        element.child(icon(
+                            "icons/pin-filled.svg",
+                            12.0,
+                            if session.is_busy() {
+                                theme.text_tertiary
+                            } else {
+                                theme.text_ghost
+                            },
+                        ))
+                    })
                     .when_some(
                         session_time_label(session, unix_time()),
                         |element, label| {
@@ -2096,6 +2138,7 @@ impl Waku {
                 &menu,
                 move |_| {
                     let rename_waku = waku.clone();
+                    let pin_waku = waku.clone();
                     let copy_waku = waku.clone();
                     let archive_waku = waku.clone();
                     let remove_waku = waku.clone();
@@ -2106,6 +2149,23 @@ impl Waku {
                             });
                         })
                         .icon("icons/pencil.svg"),
+                        MenuItem::new(
+                            if pinned {
+                                tr!("session.unpin")
+                            } else {
+                                tr!("session.pin")
+                            },
+                            move |_, cx| {
+                                let _ = pin_waku.update(cx, |waku, cx| {
+                                    waku.toggle_session_pin(session_id, cx)
+                                });
+                            },
+                        )
+                        .icon(if pinned {
+                            "icons/pin-off.svg"
+                        } else {
+                            "icons/pin.svg"
+                        }),
                         MenuItem::new(tr!("session.copy_working_directory"), move |_, cx| {
                             let _ = copy_waku.update(cx, |waku, cx| {
                                 waku.copy_session_working_directory(session_id, cx);

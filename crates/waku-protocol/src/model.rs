@@ -1000,6 +1000,10 @@ pub struct AgentSession {
     /// window.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub archived_at: Option<u64>,
+    /// When the session was pinned to the top of the sidebar, unix seconds.
+    /// `None` while the session sits in its ordinary group.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pinned_at: Option<u64>,
     #[serde(default)]
     pub provider_cursor: Option<ProviderResumeCursor>,
     /// Slash commands the provider reported for this session's live process,
@@ -1070,6 +1074,7 @@ impl AgentSession {
             updated_at: now,
             last_reply_at: None,
             archived_at: None,
+            pinned_at: None,
             detail_loaded: true,
             provider_cursor: None,
             available_commands: Vec::new(),
@@ -1108,6 +1113,7 @@ impl AgentSession {
             updated_at: self.updated_at,
             last_reply_at: self.last_reply_at,
             archived_at: self.archived_at,
+            pinned_at: self.pinned_at,
             provider_cursor: None,
             available_commands: Vec::new(),
             thread_goal: None,

@@ -558,6 +558,42 @@ impl Waku {
         }
     }
 
+    /// Moves a task into or out of the sidebar's top Pinned group.
+    ///
+    /// Like archiving, the toggle is a mutation: bumping `updated_at` keeps
+    /// merge precedence honest so a stale client save cannot resurrect or
+    /// clobber the flag.
+    pub(super) fn toggle_session_pin(&mut self, session_id: Uuid, cx: &mut Context<Self>) {
+        let Some(pinned) = self
+            .state
+            .sessions
+            .iter()
+            .find(|session| session.id == session_id)
+            .filter(|session| session.has_started() && session.archived_at.is_none())
+            .map(|session| session.pinned_at.is_some())
+        else {
+            return;
+        };
+        let now = unix_time();
+        if let Some(session) = self.state.session_mut(session_id) {
+            session.pinned_at = if pinned { None } else { Some(now) };
+            session.updated_at = now;
+        }
+        self.save();
+        cx.notify();
+    }
+
+    pub(super) fn toggle_session_pin_action(
+        &mut self,
+        _: &ToggleSessionPin,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(session_id) = self.state.selected_session {
+            self.toggle_session_pin(session_id, cx);
+        }
+    }
+
     pub(super) fn new_session_action(
         &mut self,
         _: &NewSession,
