@@ -3,6 +3,11 @@ use super::*;
 use anyhow::Context as _;
 use base64::Engine as _;
 
+/// Group on the session column's hitbox: the composer card reads it through
+/// `group_drag_over` so it lights up wherever over the column an OS file drag
+/// is held, and the column itself accepts the drop for the same staging.
+pub(super) const SESSION_DROP_GROUP: &str = "session-file-drop";
+
 const COMPUTER_USE_PREVIEW_WIDTH: f32 = 304.0;
 const COMPUTER_USE_PREVIEW_HEIGHT: f32 = 172.0;
 const COMPUTER_USE_PREVIEW_RADIUS: f32 = 12.0;
@@ -2776,6 +2781,11 @@ impl Waku {
                 // so the field's overlay scrollbar can hug the card's edge.
                 .py(px(10.0))
                 .drag_over::<ExternalPaths>(move |style, _, _, _| {
+                    style.bg(drop_wash).border_color(drop_ring)
+                })
+                // The same highlight when the drag is anywhere over the
+                // session column — the card is where the chips will land.
+                .group_drag_over::<ExternalPaths>(SESSION_DROP_GROUP, move |style| {
                     style.bg(drop_wash).border_color(drop_ring)
                 })
                 .on_drop(cx.listener(|this, paths: &ExternalPaths, window, cx| {

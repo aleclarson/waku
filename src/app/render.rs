@@ -377,6 +377,19 @@ impl Render for Waku {
                     .when(panels.sidebar > 0.0, |element| {
                         element.border_l_1().border_color(theme.sidebar_border)
                     })
+                    // Files dropped anywhere in the session column stage as
+                    // composer attachments. The group marks the column's
+                    // hitbox so the composer card can light itself up as the
+                    // landing zone wherever the drag is held.
+                    .when(self.selected_project().is_some(), |element| {
+                        element
+                            .group(composer::SESSION_DROP_GROUP)
+                            .on_drop(cx.listener(
+                                |this, paths: &ExternalPaths, window, cx| {
+                                    this.stage_dropped_files(paths, window, cx);
+                                },
+                            ))
+                    })
                     .child(self.render_header(window, cx))
                     .child(if empty {
                         self.render_empty_state(cx).into_any_element()
