@@ -249,7 +249,7 @@ pub fn run() {
                 KeyBinding::new("secondary-o", NewProject, None),
                 KeyBinding::new("secondary-,", OpenSettings, None),
                 KeyBinding::new("secondary-b", ToggleSidebar, None),
-                KeyBinding::new("secondary-shift-b", ToggleRightPanel, None),
+                KeyBinding::new("secondary-alt-b", ToggleRightPanel, None),
                 KeyBinding::new("secondary-k", ToggleCommandPalette, None),
                 KeyBinding::new("secondary-alt-shift-f", ToggleFpsCounter, None),
                 KeyBinding::new("secondary-[", NavigateBack, Some("Waku")),

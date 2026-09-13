@@ -813,7 +813,7 @@ impl Waku {
                     "command_palette.show_right_panel"
                 }),
                 "icons/panel-right.svg",
-                Some(crate::platform::primary_shortcut("⇧⌘B", "Ctrl+Shift+B")),
+                Some(crate::platform::primary_shortcut("⌥⌘B", "Ctrl+Alt+B")),
                 PaletteAction::ToggleRightPanel,
                 "toggle show hide right panel files diff terminal browser",
                 next(),
