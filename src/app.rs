@@ -68,12 +68,13 @@ use crate::ui::{
 use crate::{
     CancelProjectSwitch, CancelTaskSwitch, CancelTurn, CloseFind, CloseWindow,
     ConfirmProjectSwitch, ConfirmTaskSwitch, CopySelection, CopyWorkingDirectory, FindNext,
-    FindPrevious, FocusComposer, FocusTerminal, NavigateBack, NavigateForward, NewProject,
-    NewSession, OpenFind, OpenFindReplace, OpenResumePicker, OpenSettings, ReplaceAllMatches,
-    SaveFile, SelectFirstProject, SelectFirstTask, SelectLastProject, SelectLastTask,
-    SwitchProjectBackward, SwitchProjectForward, SwitchTaskBackward, SwitchTaskForward,
-    ToggleCommandPalette, ToggleFindCaseSensitive, ToggleFindRegex, ToggleFindWholeWord,
-    ToggleFpsCounter, ToggleModelPicker, ToggleRightPanel, ToggleSidebar, ToggleUsagePanel,
+    FindPrevious, FocusComposer, FocusTerminal, GoToLatestUnseenCompletion, NavigateBack,
+    NavigateForward, NewProject, NewSession, OpenFind, OpenFindReplace, OpenResumePicker,
+    OpenSettings, ReplaceAllMatches, SaveFile, SelectFirstProject, SelectFirstTask,
+    SelectLastProject, SelectLastTask, SwitchProjectBackward, SwitchProjectForward,
+    SwitchTaskBackward, SwitchTaskForward, ToggleCommandPalette, ToggleFindCaseSensitive,
+    ToggleFindRegex, ToggleFindWholeWord, ToggleFpsCounter, ToggleModelPicker,
+    ToggleRightPanel, ToggleSidebar, ToggleUsagePanel,
 };
 
 #[cfg(target_os = "macos")]
@@ -1060,10 +1061,11 @@ pub struct Waku {
     /// Selection is committed only after this target's transcript arrives, so
     /// the currently visible task stays intact during daemon latency.
     pending_session_activation: Option<PendingSessionActivation>,
-    /// Tasks whose turn settled while another task was on screen. The sidebar
-    /// draws an unread dot in the row's status slot until the task is
-    /// activated.
-    unseen_completions: HashSet<Uuid>,
+    /// Tasks whose turn settled while another task was on screen, stamped with
+    /// the finish time. The sidebar draws an unread dot in the row's status
+    /// slot until the task is activated; GoToLatestUnseenCompletion jumps to
+    /// the newest entry.
+    unseen_completions: HashMap<Uuid, u64>,
     analytics: crate::analytics::Analytics,
     state: PersistedState,
     store: StateStore,
@@ -2746,7 +2748,7 @@ impl Waku {
                 daemon_hostname,
                 session_hydrations: HashSet::new(),
                 pending_session_activation: None,
-                unseen_completions: HashSet::new(),
+                unseen_completions: HashMap::new(),
                 analytics,
                 state,
                 store,

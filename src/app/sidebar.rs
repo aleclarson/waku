@@ -1940,7 +1940,7 @@ impl Waku {
                     })
                     .when(
                         session.status == SessionStatus::Idle
-                            && self.unseen_completions.contains(&session_id),
+                            && self.unseen_completions.contains_key(&session_id),
                         |element| {
                             element.child(
                                 div()

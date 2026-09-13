@@ -106,6 +106,8 @@ command_palette.agent_cli_thread_id_copied:
   en: Agent CLI thread ID copied
 command_palette.collapse_sidebar_groups:
   en: Collapse all sidebar groups
+command_palette.go_to_latest_unseen_completion:
+  en: Go to latest unseen completion
 command_palette.show_sidebar:
   en: Show sidebar
 command_palette.hide_sidebar:

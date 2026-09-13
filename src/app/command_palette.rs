@@ -157,6 +157,7 @@ enum PaletteAction {
     ChooseModel,
     ToggleUsage,
     CollapseSidebarGroups,
+    GoToLatestUnseenCompletion,
     ToggleSidebar,
     ToggleRightPanel,
     OpenSettings(SettingsPage),
@@ -779,6 +780,17 @@ impl Waku {
             "collapse close fold all sidebar groups projects dates history",
             next(),
         ));
+        if !self.unseen_completions.is_empty() {
+            commands.push(CommandPaletteItem::command(
+                PaletteSection::Commands,
+                tr!("command_palette.go_to_latest_unseen_completion"),
+                "icons/corner-down-right.svg",
+                Some(crate::platform::primary_shortcut("⌃`", "Ctrl+`")),
+                PaletteAction::GoToLatestUnseenCompletion,
+                "go to latest most recent unseen unread completed finished failed turn task session jump navigate",
+                next(),
+            ));
+        }
         commands.extend([
             CommandPaletteItem::command(
                 PaletteSection::Commands,
@@ -1582,6 +1594,9 @@ impl Waku {
                 }
             }
             PaletteAction::CollapseSidebarGroups => self.collapse_all_sidebar_groups(cx),
+            PaletteAction::GoToLatestUnseenCompletion => {
+                self.go_to_latest_unseen_completion_action(&GoToLatestUnseenCompletion, window, cx)
+            }
             PaletteAction::ToggleSidebar => self.toggle_sidebar_action(&ToggleSidebar, window, cx),
             PaletteAction::ToggleRightPanel => {
                 self.toggle_right_panel_action(&ToggleRightPanel, window, cx)

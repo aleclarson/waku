@@ -1336,7 +1336,26 @@ impl Waku {
         {
             self.analytics.track(event);
         }
+        if result.is_some() && status != TurnStatus::Interrupted {
+            self.mark_unseen_turn_settled(session_id);
+        }
         result
+    }
+
+    /// A turn that settled off-screen earns an unread dot in the sidebar's
+    /// status slot and a GoToLatestUnseenCompletion candidate until the task
+    /// is activated. Interrupted turns are user-driven stops, not completions,
+    /// so the caller's status filter keeps them out.
+    fn mark_unseen_turn_settled(&mut self, session_id: Uuid) {
+        if sidebar::sidebar_session_selected(
+            self.state.selected_session,
+            self.pending_session_activation
+                .map(|pending| pending.session_id),
+            session_id,
+        ) {
+            return;
+        }
+        self.unseen_completions.insert(session_id, unix_time());
     }
 
     /// Records a failed submission that is about to be unwound and therefore

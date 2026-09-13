@@ -13,6 +13,25 @@ fn new_task_runtime_mode(current: Option<&AgentSession>, remembered: RuntimeMode
         .unwrap_or(remembered)
 }
 
+/// The newest off-screen turn finish still unseen, for
+/// GoToLatestUnseenCompletion. Entries are stamped when the turn settles and
+/// cleared on activation, so the map itself is the candidate set; the
+/// on-screen filter only guards the window where a pending activation has not
+/// committed yet.
+pub(super) fn latest_unseen_completion(
+    unseen_completions: &HashMap<Uuid, u64>,
+    selected_session: Option<Uuid>,
+    pending_activation: Option<Uuid>,
+) -> Option<Uuid> {
+    unseen_completions
+        .iter()
+        .filter(|(session_id, _)| {
+            !sidebar::sidebar_session_selected(selected_session, pending_activation, **session_id)
+        })
+        .max_by_key(|(_, completed_at)| *completed_at)
+        .map(|(session_id, _)| *session_id)
+}
+
 impl Waku {
     pub(crate) fn open_task_from_notification(&mut self, session_id: Uuid, cx: &mut Context<Self>) {
         self.select_session(session_id, cx);
@@ -742,6 +761,24 @@ impl Waku {
                 cx,
             );
         }
+    }
+
+    pub(super) fn go_to_latest_unseen_completion_action(
+        &mut self,
+        _: &GoToLatestUnseenCompletion,
+        _: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(target) = latest_unseen_completion(
+            &self.unseen_completions,
+            self.state.selected_session,
+            self.pending_session_activation
+                .map(|pending| pending.session_id),
+        ) else {
+            return;
+        };
+        self.settings_page = None;
+        self.request_session_activation(target, SessionActivationTransition::Visit, cx);
     }
 
     pub(super) fn navigation_mouse_down(

@@ -74,6 +74,7 @@ actions!(
         ToggleFpsCounter,
         NavigateBack,
         NavigateForward,
+        GoToLatestUnseenCompletion,
         SwitchTaskForward,
         SwitchTaskBackward,
         SelectFirstTask,
@@ -250,6 +251,9 @@ pub fn run() {
                 KeyBinding::new("secondary-alt-shift-f", ToggleFpsCounter, None),
                 KeyBinding::new("secondary-[", NavigateBack, Some("Waku")),
                 KeyBinding::new("secondary-]", NavigateForward, Some("Waku")),
+                // Same spelling VS Code gives its terminal toggle; unclaimed
+                // in text fields, so it fires with the composer focused too.
+                KeyBinding::new("ctrl-`", GoToLatestUnseenCompletion, Some("Waku")),
                 KeyBinding::new("ctrl-tab", SwitchTaskForward, Some("Waku")),
                 KeyBinding::new("ctrl-shift-tab", SwitchTaskBackward, Some("Waku")),
                 KeyBinding::new("ctrl-escape", CancelTaskSwitch, Some("Waku")),

@@ -657,23 +657,12 @@ impl Waku {
                 runtime.stream_phase = None;
                 runtime.park_announced = false;
                 let needs_fallback = !self.turn_has_assistant_message(session_id);
-                // A turn that settled off-screen leaves an unread dot in the
-                // sidebar's status slot until the task is activated.
-                let on_screen = sidebar::sidebar_session_selected(
-                    self.state.selected_session,
-                    self.pending_session_activation
-                        .map(|pending| pending.session_id),
-                    session_id,
-                );
                 if let Some(session) = self.state.session_mut(session_id) {
                     session.status = if success {
                         SessionStatus::Idle
                     } else {
                         SessionStatus::Failed
                     };
-                    if success && !on_screen {
-                        self.unseen_completions.insert(session_id);
-                    }
                     if needs_fallback {
                         session.push_message(
                             MessageRole::Assistant,

@@ -3,6 +3,7 @@ use super::composer::{
     next_picker_highlight, visible_branch_entries,
 };
 use super::runtime::{merge_remote_session_catalog, session_has_active_provider_turn};
+use super::sessions::latest_unseen_completion;
 use super::settings::visible_settings_pages;
 use super::{
     ESCAPE_STOP_CONFIRMATION_TIMEOUT, EscapeStopConfirmation, EscapeStopPress, EscapeStopTarget,
@@ -69,7 +70,7 @@ fn structured_user_input_preserves_question_order_and_custom_answer_precedence()
 }
 use gpui::{ListAlignment, ListState, Pixels, px};
 use std::{
-    collections::{HashSet, VecDeque},
+    collections::{HashMap, HashSet, VecDeque},
     time::{Duration, Instant},
 };
 use uuid::Uuid;
@@ -374,6 +375,31 @@ fn session_navigation_prunes_deleted_tasks() {
     navigation.remove(third);
     assert_eq!(navigation.go_back(second), None);
     assert_eq!(navigation.go_forward(second), None);
+}
+
+#[test]
+fn latest_unseen_completion_picks_the_newest_unvisited_finish() {
+    let older = Uuid::new_v4();
+    let newer = Uuid::new_v4();
+    let on_screen = Uuid::new_v4();
+    let unseen = HashMap::from([(older, 100), (newer, 300), (on_screen, 500)]);
+
+    // The newest finish wins while every candidate is off-screen.
+    assert_eq!(
+        latest_unseen_completion(&unseen, None, None),
+        Some(on_screen)
+    );
+    // A task that is selected or pending activation was seen by definition.
+    assert_eq!(
+        latest_unseen_completion(&unseen, Some(on_screen), None),
+        Some(newer)
+    );
+    assert_eq!(
+        latest_unseen_completion(&unseen, None, Some(on_screen)),
+        Some(newer)
+    );
+    // No candidates: the command is a no-op.
+    assert_eq!(latest_unseen_completion(&HashMap::new(), None, None), None);
 }
 
 #[test]
