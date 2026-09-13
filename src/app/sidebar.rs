@@ -2048,15 +2048,17 @@ impl Waku {
                             });
                         })
                         .icon("icons/copy.svg"),
-                        MenuItem::new(tr!("session.archive"), move |_, cx| {
-                            let _ = archive_waku
-                                .update(cx, |waku, cx| waku.archive_session(session_id, cx));
+                        MenuItem::new(tr!("session.archive"), move |window, cx| {
+                            let _ = archive_waku.update(cx, |waku, cx| {
+                                waku.archive_session(session_id, window, cx)
+                            });
                         })
                         .icon("icons/archive.svg"),
                         MenuItem::Separator,
-                        MenuItem::new(tr!("common.remove"), move |_, cx| {
-                            let _ = remove_waku
-                                .update(cx, |waku, cx| waku.remove_session(session_id, cx));
+                        MenuItem::new(tr!("common.remove"), move |window, cx| {
+                            let _ = remove_waku.update(cx, |waku, cx| {
+                                waku.remove_session(session_id, window, cx)
+                            });
                         })
                         .icon("icons/trash.svg"),
                     ]

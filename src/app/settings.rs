@@ -1374,14 +1374,14 @@ impl Waku {
                 .hover(|element| element.bg(theme.danger.opacity(0.12)))
                 .active(|element| element.bg(theme.danger.opacity(0.18)))
                 .child(tr!("common.remove"))
-                .on_click(cx.listener(move |this, _, _, cx| {
-                    this.remove_session(session_id, cx);
+                .on_click(cx.listener(move |this, _, window, cx| {
+                    this.remove_session(session_id, window, cx);
                 }))
-                .on_key_down(cx.listener(move |this, event: &KeyDownEvent, _, cx| {
+                .on_key_down(cx.listener(move |this, event: &KeyDownEvent, window, cx| {
                     if !event.keystroke.modifiers.modified()
                         && matches!(event.keystroke.key.as_str(), "enter" | "space")
                     {
-                        this.remove_session(session_id, cx);
+                        this.remove_session(session_id, window, cx);
                         cx.stop_propagation();
                     }
                 }));

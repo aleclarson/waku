@@ -339,7 +339,12 @@ impl Waku {
         }
     }
 
-    pub(super) fn remove_session(&mut self, session_id: Uuid, cx: &mut Context<Self>) {
+    pub(super) fn remove_session(
+        &mut self,
+        session_id: Uuid,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         if self.response_fork_preparations.contains_key(&session_id) {
             self.show_toast(tr!("session.response_fork_in_progress"));
             cx.notify();
@@ -419,7 +424,7 @@ impl Waku {
         self.invalidate_checkpoint_refs();
 
         if was_selected {
-            self.select_session_fallback(project_id, projectless, cx);
+            self.select_session_fallback(project_id, projectless, window, cx);
         } else {
             self.save();
             cx.notify();
@@ -434,28 +439,33 @@ impl Waku {
             .detach();
     }
 
-    /// Moves selection to the project task a departing session leaves behind:
-    /// the most recently updated unarchived one, or a fresh draft.
+    /// Moves selection after the viewed task departs: the newest unseen turn
+    /// finish, like GoToLatestUnseenCompletion, or the project's New task
+    /// composer when nothing is waiting.
     fn select_session_fallback(
         &mut self,
         project_id: Uuid,
         projectless: bool,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         self.state.selected_session = None;
-        let next_session = self
-            .state
-            .sessions
-            .iter()
-            .filter(|session| session.project_id == project_id && session.archived_at.is_none())
-            .max_by_key(|session| session.updated_at)
-            .map(|session| session.id);
-        if let Some(session_id) = next_session {
-            self.select_session(session_id, cx);
-        } else if projectless {
-            self.create_projectless_session(cx);
+        self.settings_page = None;
+        if let Some(session_id) = latest_unseen_completion(
+            &self.unseen_completions,
+            self.state.selected_session,
+            self.pending_session_activation
+                .map(|pending| pending.session_id),
+        ) {
+            self.request_session_activation(session_id, SessionActivationTransition::Visit, cx);
         } else {
-            self.create_session_for(project_id, self.state.last_provider, cx);
+            if projectless {
+                self.create_projectless_session(cx);
+            } else {
+                self.create_session_for(project_id, self.state.last_provider, cx);
+            }
+            let focus_handle = self.composer_focus(cx);
+            window.focus(&focus_handle, cx);
         }
     }
 
@@ -464,7 +474,12 @@ impl Waku {
     /// An active turn is stopped first — a hidden session must not keep
     /// working. Archiving never touches the task's worktree; the daemon purges
     /// archives once they outlive the retention window.
-    pub(super) fn archive_session(&mut self, session_id: Uuid, cx: &mut Context<Self>) {
+    pub(super) fn archive_session(
+        &mut self,
+        session_id: Uuid,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let Some((project_id, is_busy)) = self
             .state
             .sessions
@@ -503,7 +518,7 @@ impl Waku {
             session.updated_at = now;
         }
         if was_selected {
-            self.select_session_fallback(project_id, projectless, cx);
+            self.select_session_fallback(project_id, projectless, window, cx);
         } else {
             self.save();
             cx.notify();
@@ -535,11 +550,11 @@ impl Waku {
     pub(super) fn archive_session_action(
         &mut self,
         _: &ArchiveSession,
-        _: &mut Window,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         if let Some(session_id) = self.state.selected_session {
-            self.archive_session(session_id, cx);
+            self.archive_session(session_id, window, cx);
         }
     }
 
