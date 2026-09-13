@@ -1871,6 +1871,7 @@ impl Waku {
                 .into_any_element()
         } else {
             div()
+                .id(SharedString::from(format!("session-title-{session_id}")))
                 .flex_1()
                 .min_w_0()
                 .whitespace_normal()
@@ -1878,6 +1879,14 @@ impl Waku {
                 .text_overflow(gpui::TextOverflow::Truncate("...".into()))
                 .text_size(sp(13.5))
                 .text_color(theme.text)
+                .on_click(
+                    cx.listener(move |this, event: &gpui::ClickEvent, window, cx| {
+                        if event.click_count() == 2 {
+                            this.begin_session_rename(session_id, window, cx);
+                            cx.stop_propagation();
+                        }
+                    }),
+                )
                 .child(SharedString::from(localized_session_title(session)))
                 .into_any_element()
         };
