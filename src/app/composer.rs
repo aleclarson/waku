@@ -1,3 +1,4 @@
+use super::annotations::{annotation_display_content, annotation_prompt_prefix};
 use super::*;
 
 use anyhow::Context as _;
@@ -2200,13 +2201,31 @@ impl Waku {
             .iter()
             .map(|attachment| attachment.mention.clone())
             .collect::<Vec<_>>();
-        let submission = merged_submission(prompt, &mentions)?;
-        let display_content = (!attachments.is_empty()).then(|| prompt.trim().to_owned());
+        let annotations = self.drain_transcript_annotations();
+        let submission = match merged_submission(prompt, &mentions) {
+            Some(body) => format!("{}{}", annotation_prompt_prefix(&annotations), body),
+            // Annotations alone still send: their header is the whole prompt.
+            None if !annotations.is_empty() => {
+                annotation_prompt_prefix(&annotations).trim_end().to_owned()
+            }
+            None => return None,
+        };
+        let display_content = (!attachments.is_empty() || !annotations.is_empty()).then(|| {
+            let typed = prompt.trim();
+            if typed.is_empty() {
+                // No typed text to echo; show the comments (or the quoted
+                // passages) so the user bubble is not a blank card.
+                annotation_display_content(&annotations)
+            } else {
+                typed.to_owned()
+            }
+        });
         self.discard_current_composer_draft(cx);
         Some(ComposerSubmission {
             prompt: submission,
             display_content,
             attachments,
+            annotations,
         })
     }
 
@@ -2343,6 +2362,15 @@ impl Waku {
             .into_iter()
             .map(ComposerAttachment::from)
             .collect();
+        if !submission.annotations.is_empty() {
+            // The drain consumed the highlights; hand them back so the
+            // restored draft still carries its comments.
+            self.transcript_selection
+                .annotations
+                .borrow_mut()
+                .items
+                .extend(submission.annotations);
+        }
         let content = submission.display_content.unwrap_or(submission.prompt);
         self.composer
             .update(cx, |input, cx| input.set_content(content, cx));
@@ -2749,7 +2777,13 @@ impl Waku {
                 .is_armed_for(EscapeStopTarget::for_session(session), Instant::now())
         });
         let has_draft = !self.composer.read(cx).content(cx).trim().is_empty()
-            || !self.composer_attachments.is_empty();
+            || !self.composer_attachments.is_empty()
+            || !self
+                .transcript_selection
+                .annotations
+                .borrow()
+                .items
+                .is_empty();
         // With no provider to run it, a draft has nowhere to go. The button
         // reads as unavailable and the submission path refuses too, so
         // `enter` cannot slip past a disabled control.
@@ -2825,6 +2859,7 @@ impl Waku {
                 .when(!self.composer_attachments.is_empty(), |card| {
                     card.child(self.render_composer_attachments(cx))
                 })
+                .children(self.render_annotation_chip(cx))
                 .child(div().pt(px(2.0)).child(self.composer.clone()))
                 .child(
                     div()

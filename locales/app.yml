@@ -1231,6 +1231,18 @@ composer.suggestions:
   en: Composer suggestions
 composer.loading_suggestions:
   en: Loading suggestions…
+annotations.add_to_chat:
+  en: Add to chat
+annotations.comment_placeholder:
+  en: Add an optional comment...
+annotations.remove:
+  en: Remove annotation
+annotations.remove_all:
+  en: Remove all annotations
+annotations.count_one:
+  en: 1 annotation
+annotations.count_many:
+  en: "%{count} annotations"
 composer.remove_attachment:
   en: Remove %{name}
 

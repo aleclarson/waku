@@ -605,6 +605,12 @@ goal.usage_tokens_unbudgeted: "%{used} トークン"
 composer.edit_in_composer: 入力欄で編集
 composer.steer: 指示を追加
 composer.remove_followup: キューから削除
+annotations.add_to_chat: チャットに追加
+annotations.comment_placeholder: コメントを入力（任意）…
+annotations.remove: 注釈を削除
+annotations.remove_all: すべての注釈を削除
+annotations.count_one: 1 件の注釈
+annotations.count_many: "%{count} 件の注釈"
 user_input.other_placeholder: 別の回答を入力
 user_input.back: 戻る
 user_input.next: 次へ

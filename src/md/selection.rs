@@ -106,6 +106,16 @@ impl Selection {
         true
     }
 
+    /// The resolved spans in document order. Empty until a drag moves.
+    pub fn spans(&self) -> &[Span] {
+        &self.spans
+    }
+
+    /// Whether a drag is currently in progress.
+    pub fn is_dragging(&self) -> bool {
+        self.dragging
+    }
+
     /// Finish `key`'s drag. Returns the selected text when non-empty.
     pub fn end_drag(&mut self, key: &TextKey) -> Option<String> {
         if self.anchor.as_ref() != Some(key) || !self.dragging {
@@ -253,10 +263,82 @@ fn clamp_boundary(text: &str, offset: usize) -> usize {
     offset
 }
 
+/// A highlighted passage of transcript text carrying a user comment.
+///
+/// Annotations are created from a finished selection confined to one agent
+/// message. `spans` snapshots the selected text the way copy does, so the
+/// quoted passage stays intact even if the message is later edited.
+#[derive(Clone, Debug)]
+pub struct TranscriptAnnotation {
+    pub id: u64,
+    /// The message the spans were taken from; they all share one
+    /// `message-{id}` row key.
+    pub message_id: uuid::Uuid,
+    pub spans: Vec<Span>,
+    pub comment: String,
+}
+
+impl TranscriptAnnotation {
+    /// The annotated text, spans joined in document order the way copy joins
+    /// them.
+    pub fn quoted_text(&self) -> String {
+        let mut out = String::new();
+        let mut has_span = false;
+        for span in &self.spans {
+            if has_span {
+                out.push('\n');
+                if span.block_break {
+                    out.push('\n');
+                }
+            }
+            out.push_str(&span.text[span.range.clone()]);
+            has_span = true;
+        }
+        out
+    }
+}
+
+/// The live set of commented highlights over one transcript.
+///
+/// Painted by the renderer alongside the selection wash: every annotation span
+/// keeps a soft fill plus an underline so it reads as annotated rather than
+/// selected. `hovered`/`editing` emphasise one highlight — the one under the
+/// pointer or the one whose comment editor is open.
+#[derive(Debug, Default)]
+pub struct Annotations {
+    pub items: Vec<TranscriptAnnotation>,
+    pub hovered: Option<u64>,
+    pub editing: Option<u64>,
+}
+
+impl Annotations {
+    /// Each annotation span painted over `key` this frame, paired with whether
+    /// it is emphasised (hovered or being edited).
+    pub fn wash_spans<'a>(
+        &'a self,
+        key: &'a TextKey,
+    ) -> impl Iterator<Item = (&'a Span, bool)> + 'a {
+        self.items
+            .iter()
+            .flat_map(|annotation| annotation.spans.iter().map(move |span| (annotation, span)))
+            .filter(|(_, span)| span.key == *key)
+            .map(|(annotation, span)| {
+                (
+                    span,
+                    self.hovered == Some(annotation.id) || self.editing == Some(annotation.id),
+                )
+            })
+    }
+}
+
 /// Shared handles the renderer clones into paint closures.
 pub struct SelectionState<G = ()> {
     pub selection: Rc<RefCell<Selection>>,
     pub registry: Rc<RefCell<SelectionRegistry<G>>>,
+    /// Commented highlights painted beneath the selection wash. Only the
+    /// transcript's selection state populates this; the toast, diff and
+    /// skills registries never carry annotations.
+    pub annotations: Rc<RefCell<Annotations>>,
 }
 
 impl<G> Clone for SelectionState<G> {
@@ -264,6 +346,7 @@ impl<G> Clone for SelectionState<G> {
         Self {
             selection: self.selection.clone(),
             registry: self.registry.clone(),
+            annotations: self.annotations.clone(),
         }
     }
 }
@@ -273,6 +356,7 @@ impl<G> Default for SelectionState<G> {
         Self {
             selection: Rc::default(),
             registry: Rc::default(),
+            annotations: Rc::default(),
         }
     }
 }

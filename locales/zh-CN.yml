@@ -577,6 +577,12 @@ goal.usage_tokens_unbudgeted: "%{used} 个 token"
 composer.edit_in_composer: 在输入框中编辑
 composer.steer: 引导
 composer.remove_followup: 从队列中移除
+annotations.add_to_chat: 添加到对话
+annotations.comment_placeholder: 添加可选评论…
+annotations.remove: 删除批注
+annotations.remove_all: 删除所有批注
+annotations.count_one: 1 条批注
+annotations.count_many: "%{count} 条批注"
 user_input.other_placeholder: 输入其他回答
 user_input.back: 上一步
 user_input.next: 下一步

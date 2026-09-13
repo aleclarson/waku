@@ -69,7 +69,7 @@ impl TextGeometry {
         }
     }
 
-    fn is_missing(&self) -> bool {
+    pub(crate) fn is_missing(&self) -> bool {
         match self {
             Self::Text(layout) => layout_missing(layout),
             Self::Math(layout) => layout.is_missing(),
@@ -213,6 +213,11 @@ pub struct Palette {
     pub selection: Hsla,
     pub search_match: Hsla,
     pub active_search_match: Hsla,
+    /// Soft fill marking a commented transcript passage.
+    pub annotation: Hsla,
+    /// The underline beneath it — stronger than the fill so a short annotated
+    /// word still reads as annotated.
+    pub annotation_stroke: Hsla,
     pub accent: Hsla,
     pub added: Hsla,
     pub removed: Hsla,
@@ -250,6 +255,8 @@ impl Palette {
             } else {
                 0.70
             }),
+            annotation: search_yellow.opacity(if theme.is_dark { 0.16 } else { 0.18 }),
+            annotation_stroke: search_yellow.opacity(if theme.is_dark { 0.80 } else { 0.70 }),
             accent: theme.accent,
             added: theme.success,
             removed: theme.danger,
@@ -733,6 +740,8 @@ fn text_element_with_selection(
     selection_wash: Hsla,
     search_match_wash: Hsla,
     active_search_match_wash: Hsla,
+    annotation_wash: Hsla,
+    annotation_stroke: Hsla,
     block_break: bool,
 ) -> AnyElement {
     let styled = StyledText::new(flat.text.clone()).with_runs(runs);
@@ -792,6 +801,52 @@ fn text_element_with_selection(
                             rect,
                             px(2.0),
                             color,
+                            px(0.0),
+                            gpui::transparent_black(),
+                            BorderStyle::default(),
+                        ));
+                    }
+                }
+            }
+            // Commented passages carry a soft fill plus an underline so they
+            // read as annotated rather than selected. A span only paints while
+            // its snapshot still matches the element's bytes at that offset —
+            // an edited message would otherwise carry a highlight over
+            // different words. Painted below the selection wash so selecting
+            // across an annotation still looks like a selection.
+            {
+                let annotations = selection.annotations.borrow();
+                for (span, emphasised) in annotations.wash_spans(&key) {
+                    let end = span.range.end.min(text.len());
+                    if span.range.start >= end
+                        || end > span.text.len()
+                        || span.text.as_bytes()[..end] != text.as_bytes()[..end]
+                    {
+                        continue;
+                    }
+                    let fill_color = if emphasised {
+                        annotation_wash.opacity((annotation_wash.a * 1.75).min(1.0))
+                    } else {
+                        annotation_wash
+                    };
+                    let stroke_color =
+                        annotation_stroke.opacity(if emphasised { 1.0 } else { 0.75 });
+                    for rect in range_rects(&layout, &(span.range.start..end), 0.0, 0.0) {
+                        window.paint_quad(quad(
+                            rect,
+                            px(0.0),
+                            fill_color,
+                            px(0.0),
+                            gpui::transparent_black(),
+                            BorderStyle::default(),
+                        ));
+                        window.paint_quad(quad(
+                            Bounds::new(
+                                point(rect.left(), rect.bottom() - px(1.0)),
+                                size(rect.size.width, px(1.5)),
+                            ),
+                            px(0.0),
+                            stroke_color,
                             px(0.0),
                             gpui::transparent_black(),
                             BorderStyle::default(),
@@ -862,6 +917,8 @@ fn text_element(flat: &Rc<FlatText>, key: TextKey, ctx: &Ctx) -> AnyElement {
         ctx.palette.selection,
         ctx.palette.search_match,
         ctx.palette.active_search_match,
+        ctx.palette.annotation,
+        ctx.palette.annotation_stroke,
         ctx.take_block_break(),
     )
 }
@@ -889,6 +946,8 @@ pub fn selectable_flat_text(
         None,
         code_wash,
         selection_wash,
+        gpui::transparent_black(),
+        gpui::transparent_black(),
         gpui::transparent_black(),
         gpui::transparent_black(),
         block_break,

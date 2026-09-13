@@ -175,7 +175,11 @@ impl Waku {
         self.sync_transcript_rows();
         self.sync_transcript_layout_width(window);
         self.apply_pending_transcript_search_reveal(window, cx);
+        self.prune_transcript_annotations(cx);
         let search_bar = self.render_transcript_search_bar(chat_viewport_width, cx);
+        let annotation_offer = self.render_annotation_offer(cx);
+        let annotation_editor = self.render_annotation_editor(cx);
+        let annotation_tooltip = self.render_annotation_tooltip(cx);
         let transcript_rows = self.active_transcript_rows().clone();
         // A scrollbar drag owns the position for as long as it lasts, and the
         // bar writes offsets straight into the list rather than through its
@@ -368,7 +372,15 @@ impl Waku {
                 &self.transcript_scrollbar,
             ))
             .child(self.transcript_selection_input())
+            // Paints after the selection's listener canvas so annotation hit
+            // tests see this frame's registry. Bubble listeners run in reverse
+            // paint order, so the annotation handlers fire first — the drag
+            // check reads `spans`, which a real drag has already populated.
+            .child(self.transcript_annotation_input(cx))
             .children(search_bar)
+            .children(annotation_offer)
+            .children(annotation_editor)
+            .children(annotation_tooltip)
             .into_any_element()
     }
 

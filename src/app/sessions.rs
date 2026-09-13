@@ -1014,6 +1014,29 @@ impl Waku {
         // Selection belongs to the session being left.
         self.transcript_selection.selection.borrow_mut().clear();
         self.transcript_selection.registry.borrow_mut().clear();
+        // Annotations are session-scoped too, but survive a round trip: park
+        // the departing set under its session id, then load the arriving
+        // session's parked set (usually none). `annotation_session` tracks who
+        // owns the live set because `selected_session` already points at the
+        // new session by the time this runs.
+        {
+            let mut annotations = self.transcript_selection.annotations.borrow_mut();
+            if let Some(owner) = self.annotation_session.take() {
+                self.transcript_annotations
+                    .insert(owner, std::mem::take(&mut annotations.items));
+            }
+            annotations.hovered = None;
+            annotations.editing = None;
+            self.annotation_session = self.state.selected_session;
+            if let Some(id) = self.state.selected_session {
+                annotations.items = self.transcript_annotations.remove(&id).unwrap_or_default();
+            }
+        }
+        self.annotation_editor = None;
+        self.annotation_hover = None;
+        self.annotation_press = None;
+        self.transcript_annotations
+            .retain(|id, _| self.state.sessions.iter().any(|session| session.id == *id));
         self.reset_transcript_search_for_session();
         let (streaming_messages, live_reasoning) = self.selected_session().map_or_else(
             || (Vec::new(), Vec::new()),

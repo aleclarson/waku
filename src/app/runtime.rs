@@ -2252,6 +2252,7 @@ impl Waku {
                 prompt: provider_prompt,
                 display_content,
                 attachments: edit.attachments,
+                annotations: Vec::new(),
             },
             cx,
         );

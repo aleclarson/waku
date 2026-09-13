@@ -44,6 +44,7 @@ use crate::md::render::{
     Ctx as MarkdownCtx, MarkdownView, Metrics as MarkdownMetrics, Palette as MarkdownPalette,
     TranscriptSelection,
 };
+use crate::md::selection::TranscriptAnnotation;
 use crate::ui::menu::{
     ConfirmEntry, ContextMenuHandle, DismissMenu, MenuAlign, MenuItem, SelectNextEntry,
     SelectNextTab, SelectPreviousEntry, SelectPreviousTab, context_menu, dropdown_menu, popover,
@@ -333,6 +334,9 @@ struct ComposerSubmission {
     prompt: String,
     display_content: Option<String>,
     attachments: Vec<MessageAttachment>,
+    /// Transcript annotations already folded into `prompt`'s header, kept so a
+    /// failed submission can restore them alongside the draft text.
+    annotations: Vec<TranscriptAnnotation>,
 }
 
 impl ComposerSubmission {
@@ -341,6 +345,7 @@ impl ComposerSubmission {
             prompt,
             display_content: None,
             attachments: Vec::new(),
+            annotations: Vec::new(),
         }
     }
 
@@ -353,6 +358,9 @@ impl ComposerSubmission {
             prompt: message.content,
             display_content: message.display_content,
             attachments: message.attachments,
+            // The annotation header already lives inside `content`; queueing
+            // counts as sent, so the highlights stay cleared.
+            annotations: Vec::new(),
         }
     }
 
@@ -1591,8 +1599,30 @@ pub struct Waku {
     /// callback knows about the active workspace; the renderer deliberately
     /// does not.
     markdown_link_handler: md::render::LinkHandler,
-    /// Transcript-wide text selection, spanning messages and tool output.
+    /// Transcript-wide text selection, spanning messages and tool output. Its
+    /// `annotations` handle holds the commented highlights of the session on
+    /// screen.
     transcript_selection: TranscriptSelection,
+    /// Annotation sets parked while their session is off screen. The live set
+    /// travels inside `transcript_selection.annotations`; switching sessions
+    /// swaps the two under `annotation_session`. In-memory only — never
+    /// persisted.
+    transcript_annotations: HashMap<Uuid, Vec<TranscriptAnnotation>>,
+    /// Which session's annotations are currently loaded into
+    /// `transcript_selection.annotations`.
+    annotation_session: Option<Uuid>,
+    annotation_next_id: u64,
+    /// The floating comment editor's session state: which annotation is open
+    /// and whether it has ever been confirmed.
+    annotation_editor: Option<annotations::AnnotationEditor>,
+    annotation_comment_input: Entity<TextInput>,
+    /// Highlight under the pointer; `visible` once the hover delay elapsed.
+    annotation_hover: Option<annotations::AnnotationHover>,
+    /// A mouse-down that landed on a highlight, pending its mouse-up.
+    annotation_press: Option<annotations::AnnotationPress>,
+    /// The app's window handle, for focus restore from contexts (entity
+    /// subscriptions) that carry no `&mut Window`.
+    window_handle: gpui::AnyWindowHandle,
     /// Programmatic focus for the transcript canvas. Clicking the transcript
     /// moves focus here so the shared find action can distinguish it from the
     /// right-panel file editor without putting the canvas in the tab order.
@@ -1626,6 +1656,7 @@ pub struct Waku {
 }
 
 mod activity_diff;
+mod annotations;
 mod autocomplete;
 mod background_work;
 mod branches;
@@ -1654,6 +1685,7 @@ mod usage_meter;
 mod usage_page;
 mod window_chrome;
 
+pub use annotations::init as init_annotation_keys;
 pub use autocomplete::init as init_composer_autocomplete;
 use background_work::{
     BackgroundWorkRegistry, work_kind_icon, work_status_color, work_status_label,
@@ -1997,6 +2029,9 @@ impl Waku {
         let composer = cx.new(|cx| ComposerInput::new(window, cx).padding_x(px(14.0), cx));
         let user_input_answer = cx
             .new(|cx| TextInput::new(window, cx).placeholder(tr!("user_input.other_placeholder")));
+        let annotation_comment_input = cx.new(|cx| {
+            TextInput::new(window, cx).placeholder(tr!("annotations.comment_placeholder"))
+        });
         let command_palette_search = cx.new(|cx| {
             TextInput::new(window, cx)
                 .clear_on_escape()
@@ -2480,6 +2515,15 @@ impl Waku {
             )
             .detach();
 
+            cx.subscribe(
+                &annotation_comment_input,
+                |this: &mut Self, _, event: &InputEvent, cx| match event {
+                    InputEvent::Submit(_) => this.commit_annotation_editor(cx),
+                    InputEvent::Edited | InputEvent::Focus | InputEvent::BackspaceOnEmpty => {}
+                },
+            )
+            .detach();
+
             // Clipboard images and Finder file copies are attachment payloads,
             // not text paths. The input owns representation priority; Waku
             // owns durable staging and composer/session state.
@@ -2742,6 +2786,9 @@ impl Waku {
                     }
                 })
             };
+
+            // Read before `state` moves into the struct literal below.
+            let initial_session = state.selected_session;
 
             Self {
                 daemon,
@@ -3028,6 +3075,14 @@ impl Waku {
                 activity_diff_viewports: RefCell::new(HashMap::new()),
                 markdown_link_handler,
                 transcript_selection: TranscriptSelection::default(),
+                transcript_annotations: HashMap::new(),
+                annotation_session: initial_session,
+                annotation_next_id: 1,
+                annotation_editor: None,
+                annotation_comment_input,
+                annotation_hover: None,
+                annotation_press: None,
+                window_handle: window.window_handle(),
                 transcript_focus: cx.focus_handle(),
                 transcript_search: None,
                 toast_selection: TranscriptSelection::default(),
