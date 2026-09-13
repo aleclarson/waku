@@ -9,7 +9,7 @@ use gpui::{
     App, Bounds, ClipboardEntry, ClipboardItem, Context, CursorStyle, DispatchPhase, Element,
     ElementId, ElementInputHandler, Entity, EntityInputHandler, EventEmitter, FocusHandle,
     Focusable, GlobalElementId, Hsla, InspectorElementId, IntoElement, KeyBinding, LayoutId,
-    MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, PaintQuad, Pixels, Point,
+    Length, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, PaintQuad, Pixels, Point,
     ScrollHandle, SharedString, StyledText, Subscription, Task, TextLayout, TextRun,
     UTF16Selection, UnderlineStyle, Window, actions, div, fill, point, prelude::*, px, size,
 };
@@ -639,6 +639,9 @@ pub struct TextInput {
     /// up to [`AUTO_HEIGHT_MAX`] before it scrolls; otherwise a
     /// multi-line field inherits the embedding view's metrics.
     auto_height: bool,
+    /// Row count an auto-height field grows to before its text scrolls, in
+    /// place of [`AUTO_HEIGHT_MAX`].
+    max_lines: Option<usize>,
     /// Image and file pastes surface as [`MediaPaste`] instead of being
     /// swallowed by the text path.
     accepts_media_paste: bool,
@@ -740,6 +743,7 @@ impl TextInput {
             read_only: false,
             submit_on_enter: false,
             auto_height: false,
+            max_lines: None,
             accepts_media_paste: false,
             clear_on_escape: false,
             select_all_on_focus_click: false,
@@ -876,6 +880,13 @@ impl TextInput {
     /// scrollbar that follows the caret.
     pub fn auto_height(mut self) -> Self {
         self.auto_height = true;
+        self
+    }
+
+    /// Cap an [`auto_height`](Self::auto_height) field at `lines` rows of
+    /// text before it scrolls, rather than [`AUTO_HEIGHT_MAX`].
+    pub fn max_lines(mut self, lines: usize) -> Self {
+        self.max_lines = Some(lines);
         self
     }
 
@@ -2822,13 +2833,17 @@ impl Render for TextInput {
             // field inherits the caller's, so a gutter beside an editor can
             // rely on the same line height.
             .when(self.auto_height, |field| {
+                let line_height = sp(22.0);
                 field
                     .min_h(px(24.0))
-                    .max_h(AUTO_HEIGHT_MAX)
+                    .max_h(self.max_lines.map_or(
+                        Length::from(AUTO_HEIGHT_MAX),
+                        |lines| (line_height * lines as f32).into(),
+                    ))
                     .overflow_y_scroll()
                     .track_scroll(&scroll_handle)
                     .px(padding_x)
-                    .line_height(sp(22.0))
+                    .line_height(line_height)
                     .text_size(sp(13.5))
             })
             // A single-line field never wraps: the overlong remainder slides

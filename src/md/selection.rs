@@ -301,9 +301,9 @@ impl TranscriptAnnotation {
 /// The live set of commented highlights over one transcript.
 ///
 /// Painted by the renderer alongside the selection wash: every annotation span
-/// keeps a soft fill plus an underline so it reads as annotated rather than
-/// selected. `hovered`/`editing` emphasise one highlight — the one under the
-/// pointer or the one whose comment editor is open.
+/// keeps a soft fill so it reads as annotated rather than selected.
+/// `hovered`/`editing` emphasise one highlight — the one under the pointer or
+/// the one whose comment editor is open.
 #[derive(Debug, Default)]
 pub struct Annotations {
     pub items: Vec<TranscriptAnnotation>,

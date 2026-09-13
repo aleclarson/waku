@@ -2022,7 +2022,12 @@ impl Waku {
         let user_input_answer = cx
             .new(|cx| TextInput::new(window, cx).placeholder(tr!("user_input.other_placeholder")));
         let annotation_comment_input = cx.new(|cx| {
-            TextInput::new(window, cx).placeholder(tr!("annotations.comment_placeholder"))
+            TextInput::new(window, cx)
+                .multi_line()
+                .submit_on_enter()
+                .auto_height()
+                .max_lines(8)
+                .placeholder(tr!("annotations.comment_placeholder"))
         });
         let command_palette_search = cx.new(|cx| {
             TextInput::new(window, cx)

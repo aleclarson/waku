@@ -418,7 +418,6 @@ impl Waku {
             .text_size(sp(12.5))
             .line_height(sp(14.0))
             .text_color(theme.text)
-            .hover(|element| element.bg(theme.overlay_strong))
             .focus_visible(|element| element.border_color(theme.accent))
             .child(icon("icons/compose.svg", 12.0, theme.text_secondary))
             .child(tr!("annotations.add_to_chat"))
@@ -474,12 +473,13 @@ impl Waku {
                     .bg(theme.raised)
                     .shadow_lg()
                     .flex()
-                    .items_center()
+                    .items_start()
                     .gap(px(6.0))
                     .child(
-                        TextField::new("annotation-comment", self.annotation_comment_input.clone())
+                        div()
                             .flex_1()
-                            .min_w_0(),
+                            .min_w_0()
+                            .child(self.annotation_comment_input.clone()),
                     )
                     .child(
                         icon_button("annotation-remove", "icons/trash.svg", theme)
@@ -558,9 +558,8 @@ impl Waku {
         )
     }
 
-    /// The composer's "N annotations" chip. The clear-all control stays
-    /// reachable without the hover reveal: it is tabbable, appears while it
-    /// holds focus, and activates on Enter or Space.
+    /// The composer's "N annotations" chip, with an always-visible clear-all
+    /// control: tabbable, focus-ringed, activating on Enter or Space.
     pub(super) fn render_annotation_chip(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
         let count = self.transcript_selection.annotations.borrow().items.len();
         if count == 0 {
@@ -580,7 +579,6 @@ impl Waku {
                 .flex()
                 .child(
                     div()
-                        .group("annotation-chip")
                         .flex_none()
                         .rounded_full()
                         .border_1()
@@ -606,10 +604,9 @@ impl Waku {
                                 .items_center()
                                 .justify_center()
                                 .cursor_default()
-                                .opacity(0.0)
-                                .group_hover("annotation-chip", |element| element.opacity(1.0))
-                                .focus(|element| element.opacity(1.0))
-                                .focus_visible(|element| element.border_color(theme.accent))
+                                .focus_visible(|element| {
+                                    element.border_1().border_color(theme.accent)
+                                })
                                 .hover(|element| element.bg(theme.overlay_strong))
                                 .child(icon("icons/x.svg", 10.0, theme.text_tertiary))
                                 .tooltip(Tooltip::text(tr!("annotations.remove_all")))
