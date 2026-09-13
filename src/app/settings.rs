@@ -1617,6 +1617,56 @@ impl Waku {
                     )
                     .child(theme_selector),
             )
+            .when(cfg!(target_os = "macos"), |element| {
+                // Vibrancy is a macOS-only effect; on other platforms the
+                // sidebar is already a solid fill and there is nothing to
+                // switch.
+                let transparent = self.state.sidebar_transparency;
+                element
+                    .child(div().mx(px(20.0)).h(px(1.0)).bg(theme.border))
+                    .child(
+                        div()
+                            .w_full()
+                            .min_h(px(60.0))
+                            .px(px(20.0))
+                            .py(px(12.0))
+                            .flex()
+                            .items_center()
+                            .gap(px(24.0))
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .min_w_0()
+                                    .child(
+                                        div()
+                                            .text_size(sp(13.5))
+                                            .font_weight(FontWeight::MEDIUM)
+                                            .text_color(theme.text)
+                                            .child(tr!("settings.sidebar_transparency")),
+                                    )
+                                    .child(
+                                        div()
+                                            .mt(px(5.0))
+                                            .text_size(sp(12.5))
+                                            .line_height(sp(18.0))
+                                            .text_color(theme.text_secondary)
+                                            .child(tr!(
+                                                "settings.sidebar_transparency_description"
+                                            )),
+                                    ),
+                            )
+                            .child(toggle_switch(
+                                "sidebar-transparency-toggle",
+                                transparent,
+                                false,
+                                theme,
+                                cx,
+                                move |this, window, cx| {
+                                    this.set_sidebar_transparency(!transparent, window, cx)
+                                },
+                            )),
+                    )
+            })
             .child(div().mx(px(20.0)).h(px(1.0)).bg(theme.border))
             .child(
                 div()
@@ -2616,7 +2666,31 @@ impl Waku {
             return;
         }
         self.state.theme = preference;
-        crate::theme::apply_theme_preference(preference, window, cx);
+        crate::theme::apply_theme_preference(
+            preference,
+            self.state.sidebar_transparency,
+            window,
+            cx,
+        );
+        self.save();
+        cx.notify();
+    }
+
+    pub(crate) fn sidebar_transparency(&self) -> bool {
+        self.state.sidebar_transparency
+    }
+
+    fn set_sidebar_transparency(
+        &mut self,
+        transparent: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.state.sidebar_transparency == transparent {
+            return;
+        }
+        self.state.sidebar_transparency = transparent;
+        crate::theme::apply_theme_preference(self.state.theme, transparent, window, cx);
         self.save();
         cx.notify();
     }

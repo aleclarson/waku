@@ -2128,7 +2128,7 @@ impl Waku {
                 window.display(cx).and_then(|display| display.uuid().ok()),
             ));
         }
-        crate::theme::apply_theme_preference(state.theme, window, cx);
+        crate::theme::apply_theme_preference(state.theme, state.sidebar_transparency, window, cx);
         crate::platform::set_sidebar_material_width(window, sidebar_width);
         let project_paths = state
             .projects
@@ -2398,7 +2398,12 @@ impl Waku {
 
             cx.observe_window_appearance(window, |this: &mut Self, window, cx| {
                 if this.state.theme == ThemePreference::System {
-                    crate::theme::apply_theme_preference(this.state.theme, window, cx);
+                    crate::theme::apply_theme_preference(
+                        this.state.theme,
+                        this.state.sidebar_transparency,
+                        window,
+                        cx,
+                    );
                     cx.notify();
                 }
             })

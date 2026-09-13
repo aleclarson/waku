@@ -471,9 +471,11 @@ pub fn titlebar_double_click(window: &Window) {
 /// Match Cursor's macOS glass window stack without asking GPUI's transparent
 /// Metal target to blend two translucent quads. The semantic tint is a native
 /// view above active Sidebar vibrancy; GPUI paints clear sidebar chrome and one
-/// translucent interaction layer above it.
+/// translucent interaction layer above it. With `transparent` off the effect
+/// view stops rendering and the tint view hides; GPUI's sidebar fill is opaque
+/// by then and covers the strip itself.
 #[cfg(target_os = "macos")]
-pub fn configure_sidebar_material(window: &Window, dark: bool) {
+pub fn configure_sidebar_material(window: &Window, dark: bool, transparent: bool) {
     use objc2::{MainThreadMarker, MainThreadOnly};
     use objc2_app_kit::{
         NSAutoresizingMaskOptions, NSColor, NSView, NSVisualEffectBlendingMode,
@@ -498,10 +500,18 @@ pub fn configure_sidebar_material(window: &Window, dark: bool) {
         let Some(native_window) = view.window() else {
             return;
         };
-        let background = if dark {
-            NSColor::colorWithSRGBRed_green_blue_alpha(0.0, 0.0, 0.0, 0.25)
+        let channel = if dark { 0x18 } else { 0xF3 } as f64 / 255.0;
+        let background = if transparent {
+            if dark {
+                NSColor::colorWithSRGBRed_green_blue_alpha(0.0, 0.0, 0.0, 0.25)
+            } else {
+                NSColor::colorWithSRGBRed_green_blue_alpha(1.0, 1.0, 1.0, 0.0)
+            }
         } else {
-            NSColor::colorWithSRGBRed_green_blue_alpha(1.0, 1.0, 1.0, 0.0)
+            // The window stays non-opaque, so a clear pixel would otherwise
+            // show the desktop; an opaque backdrop keeps any uncovered gap
+            // the same color GPUI paints the sidebar.
+            NSColor::colorWithSRGBRed_green_blue_alpha(channel, channel, channel, 1.0)
         };
         native_window.setBackgroundColor(Some(&background));
 
@@ -516,14 +526,17 @@ pub fn configure_sidebar_material(window: &Window, dark: bool) {
             };
             effect_view.setMaterial(NSVisualEffectMaterial::Sidebar);
             effect_view.setBlendingMode(NSVisualEffectBlendingMode::BehindWindow);
-            effect_view.setState(NSVisualEffectState::Active);
+            effect_view.setState(if transparent {
+                NSVisualEffectState::Active
+            } else {
+                NSVisualEffectState::Inactive
+            });
             configured_effect = true;
         }
         if !configured_effect {
             return;
         }
 
-        let channel = if dark { 0x18 } else { 0xF3 } as f64 / 255.0;
         let tint = NSColor::colorWithSRGBRed_green_blue_alpha(channel, channel, channel, 0.92);
 
         SIDEBAR_TINT_VIEW.with_borrow_mut(|slot| {
@@ -547,15 +560,18 @@ pub fn configure_sidebar_material(window: &Window, dark: bool) {
                 *slot = Some(tint_view);
             }
 
-            if let Some(layer) = slot.as_ref().and_then(|tint_view| tint_view.layer()) {
-                layer.setBackgroundColor(Some(&tint.CGColor()));
+            if let Some(tint_view) = slot.as_ref() {
+                tint_view.setHidden(!transparent);
+                if let Some(layer) = tint_view.layer() {
+                    layer.setBackgroundColor(Some(&tint.CGColor()));
+                }
             }
         });
     }
 }
 
 #[cfg(not(target_os = "macos"))]
-pub fn configure_sidebar_material(_: &Window, _: bool) {}
+pub fn configure_sidebar_material(_: &Window, _: bool, _: bool) {}
 
 #[cfg(target_os = "macos")]
 pub fn set_sidebar_material_width(window: &Window, width: f32) {

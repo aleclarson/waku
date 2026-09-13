@@ -222,17 +222,25 @@ pub fn init(cx: &mut App) {
     set_active_theme(theme, cx);
 }
 
-pub fn apply_theme_preference(preference: ThemePreference, window: &mut Window, cx: &mut App) {
+pub fn apply_theme_preference(
+    preference: ThemePreference,
+    sidebar_transparent: bool,
+    window: &mut Window,
+    cx: &mut App,
+) {
     crate::platform::set_window_appearance(window, native_override(preference));
     let is_dark = resolves_to_dark(preference, cx.window_appearance());
-    set_active_theme(
-        if is_dark {
-            Theme::dark()
-        } else {
-            Theme::light()
-        },
-        cx,
-    );
-    crate::platform::configure_sidebar_material(window, is_dark);
+    let mut theme = if is_dark {
+        Theme::dark()
+    } else {
+        Theme::light()
+    };
+    if !sidebar_transparent {
+        // The vibrancy stack is switched off natively, so the sidebar needs
+        // its own fill — the same solid it already uses while resizing.
+        theme.sidebar = theme.sidebar_drag_background;
+    }
+    set_active_theme(theme, cx);
+    crate::platform::configure_sidebar_material(window, is_dark, sidebar_transparent);
     window.refresh();
 }

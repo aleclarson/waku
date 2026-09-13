@@ -432,10 +432,11 @@ pub fn run() {
             });
 
             window
-                .update(cx, |_, window, cx| {
+                .update(cx, |waku, window, cx| {
                     crate::platform::configure_sidebar_material(
                         window,
                         crate::theme::Theme::current(cx).is_dark,
+                        waku.sidebar_transparency(),
                     );
                     cx.activate(true);
                 })

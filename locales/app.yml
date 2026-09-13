@@ -169,7 +169,7 @@ settings.computer_use:
 settings.general_keywords:
   en: general local projects conversations privacy analytics telemetry anonymous sharing updates automatic sparkle version math latex formula expression
 settings.appearance_keywords:
-  en: appearance theme system light dark language english chinese simplified font size text editor
+  en: appearance theme system light dark language english chinese simplified font size text editor sidebar transparency vibrancy blur opaque solid
 settings.providers_keywords:
   en: providers agents models cli version install detect claude codex cursor opencode opencode2 amp grok pi kimi fx deepseek ohmypi omp devin
 settings.skills:
@@ -328,6 +328,10 @@ settings.theme:
   en: Theme
 settings.theme_description:
   en: Choose between system, light, or dark themes
+settings.sidebar_transparency:
+  en: Sidebar transparency
+settings.sidebar_transparency_description:
+  en: Blend the desktop behind the sidebar. Turn off for a solid background.
 settings.ui_font_size:
   en: UI font size
 settings.ui_font_size_description:
