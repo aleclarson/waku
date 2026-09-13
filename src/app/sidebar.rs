@@ -2039,21 +2039,25 @@ impl Waku {
                             let _ = rename_waku.update(cx, |waku, cx| {
                                 waku.begin_session_rename(session_id, window, cx);
                             });
-                        }),
+                        })
+                        .icon("icons/pencil.svg"),
                         MenuItem::new(tr!("session.copy_working_directory"), move |_, cx| {
                             let _ = copy_waku.update(cx, |waku, cx| {
                                 waku.copy_session_working_directory(session_id, cx);
                             });
-                        }),
+                        })
+                        .icon("icons/copy.svg"),
                         MenuItem::new(tr!("session.archive"), move |_, cx| {
                             let _ = archive_waku
                                 .update(cx, |waku, cx| waku.archive_session(session_id, cx));
-                        }),
+                        })
+                        .icon("icons/archive.svg"),
                         MenuItem::Separator,
                         MenuItem::new(tr!("common.remove"), move |_, cx| {
                             let _ = remove_waku
                                 .update(cx, |waku, cx| waku.remove_session(session_id, cx));
-                        }),
+                        })
+                        .icon("icons/trash.svg"),
                     ]
                 },
             )
